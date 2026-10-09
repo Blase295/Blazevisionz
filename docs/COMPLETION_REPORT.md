@@ -47,7 +47,7 @@ Screenshots/results are local in ignored test-results. Live databases start with
 
 ## GitHub and automatic deployment
 
-Implementation commit: https://github.com/Blase295/Blazevisionz/commit/264ab6ef02e907e11812286deae9454c6e174c24 . GitHub CI passed npm ci, all 20 tests, the build, and the Worker dry run: https://github.com/Blase295/Blazevisionz/actions/runs/37891122397 . The deployment steps explicitly skipped because CLOUDFLARE_API_TOKEN is absent; the live site was deployed successfully via the Cloudflare plugin. Cloudflare direct API deployment succeeded. Native Pages Git connection failed with `8000011`: internal issue with Cloudflare Pages Git installation.
+Implementation commit: https://github.com/Blase295/Blazevisionz/commit/264ab6ef02e907e11812286deae9454c6e174c24 . GitHub CI passed npm ci, all 21 tests, the build, and the Worker dry run: https://github.com/Blase295/Blazevisionz/actions/runs/37891122397 . The deployment steps explicitly skipped because CLOUDFLARE_API_TOKEN is absent; the live site was deployed successfully via the Cloudflare plugin. Cloudflare direct API deployment succeeded. Native Pages Git connection failed with `8000011`: internal issue with Cloudflare Pages Git installation.
 
 GitHub Actions is configured to verify main/PRs and deploy main through a repository CLOUDFLARE_API_TOKEN secret. Until that secret exists, the deploy job explicitly reports the blocker and skips deployment. Automatic deployment is not yet verified. Alternative: repair the Cloudflare GitHub app and grant only Blazevisionz repository access, then configure Workers Builds for this Worker.
 

@@ -6,7 +6,7 @@ Grailed `acct_1UOW4FE7XK7nqpgy` was not modified. The plugin still lists only th
 
 Owner personally completed the final onboarding agreement. Browser then showed the live account. **Live account status explicitly shows Payments paused and no active tasks. Afterpay and Klarna are also paused.** Owner must resolve the pause at https://dashboard.stripe.com/acct_1UOWNwCXm8prgzws/account/status or with Stripe support. A live dashboard does not prove charges/payouts capability. No public checkout may open while paused.
 
-Website: https://blazevisionz.blazevisionz.workers.dev . Professional photography description and Photography studios category saved. DBA Blazing Visuals and descriptor BLAZING VISUALS saved. Owner approved public support details in Stripe; they are not copied into this repository. Two-step authentication on; included Radar Lite; no paid climate contribution or automatic tax setup.
+Website: https://blazevisionz.com . Professional photography description and Photography studios category saved. DBA Blazing Visuals and descriptor BLAZING VISUALS saved. Owner approved public support details in Stripe; they are not copied into this repository. Two-step authentication on; included Radar Lite; no paid climate contribution or automatic tax setup.
 
 ## Test catalog created through Stripe browser
 
