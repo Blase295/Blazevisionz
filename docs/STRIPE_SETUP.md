@@ -4,7 +4,7 @@ Separate account verified in browser: **Blaze Vizionz**, `acct_1UOWNwCXm8prgzws`
 
 Grailed `acct_1UOW4FE7XK7nqpgy` was not modified. The plugin still lists only that account at the last check; authorizing the separate account is required for plugin operations. Browser setup was scoped to the new account.
 
-Owner personally completed the final onboarding agreement. Browser then showed the live account. **Live account status explicitly shows Payments paused and no active tasks. Afterpay and Klarna are also paused.** Owner must resolve the pause at https://dashboard.stripe.com/acct_1UOWNwCXm8prgzws/account/status or with Stripe support. A live dashboard does not prove charges/payouts capability. No public checkout may open while paused.
+Owner personally completed the final onboarding agreement. The account initially showed Payments paused. **A fresh live-account browser check on October 9, 2026 shows Payments and Payouts active, with no active tasks.** Stripe Support has been asked to confirm whether the earlier pause is fully resolved. Optional Verified and Cartes Bancaires statuses do not establish a general card-payment restriction. No live charge was attempted. API capability verification and complete integration testing remain required before public Checkout opens.
 
 Website: https://blazevisionz.com . Professional photography description and Photography studios category saved. DBA Blazing Visuals and descriptor BLAZING VISUALS saved. Owner approved public support details in Stripe; they are not copied into this repository. Two-step authentication on; included Radar Lite; no paid climate contribution or automatic tax setup.
 

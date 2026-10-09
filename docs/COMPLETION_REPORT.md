@@ -17,11 +17,11 @@
 
 Correct separate account: `acct_1UOWNwCXm8prgzws` (Blaze Vizionz).
 
-**Live Payments paused**, explicitly shown by Stripe. No active/completed task explains the pause. Afterpay/Klarna also paused. No live product, payment link, subscription, or customer charge created. Public Checkout remains disabled.
+**Live Payments and Payouts active**, verified on a fresh browser reload October 9, 2026, with no active tasks. The earlier payment pause is no longer shown; Stripe Support has been asked to confirm resolution. No live product, payment link, subscription, or customer charge created. Public Checkout remains disabled pending credentials, API capability verification, and launch tests.
 
 Test services: Essential $100/$30 deposit/$70 balance; Signature $150/$45 deposit/$105 balance; additional edited image $20. Product/price IDs: [STRIPE_SETUP.md](STRIPE_SETUP.md).
 
-Verified card-only test configuration: `pmc_1UOWl1CXm8prgzwsFcsPRVxg`. Cards enabled; 37 other methods disabled. Default and live configurations unchanged. Preview config contains this public identifier; no API credential is installed.
+Verified card-only test configuration: `pmc_1UOWl1CXm8prgzwsFcsPRVxg`. Cards enabled; 37 other methods disabled. The shared test default was also made card-only for owner-review deposit links. Live configurations unchanged. Preview config contains this public identifier; no API credential is installed.
 
 Plugin still exposes only Grailed at the last refresh. Owner must authorize the separate account before further plugin account operations.
 
@@ -29,7 +29,7 @@ Plugin still exposes only Grailed at the last refresh. Owner must authorize the 
 
 | Check | Result and limit |
 | --- | --- |
-| Backend tests | 20 passed; actual SQLite constraints plus Stripe SDK signature verification and mocked account/session/email APIs |
+| Backend tests | 21 booking tests and 5 voice tests passed; actual SQLite constraints plus Stripe SDK signature verification and mocked provider APIs |
 | Amounts | Essential 3000+7000=10000 cents; Signature 4500+10500=15000 cents |
 | Double booking/conflicts | Active unique slot, weekly limit, protected commitments/buffers, unavailable/short slots, occupied slot closure, and rescheduling checks pass |
 | Webhooks | Genuine local HMAC-signed event accepted after mocked Stripe retrieval; forged signatures and wrong amount/currency/mode/session/unpaid states rejected; duplicate events do not duplicate confirmation outbox |
@@ -41,7 +41,7 @@ Plugin still exposes only Grailed at the last refresh. Owner must authorize the 
 | Deployed API | Availability closed; client 401; admin redirects to owner Access sign-in; booking/webhook 503 until securely configured |
 | Build | Pages Functions compilation and preview/production Worker dry runs pass; production dependency audit clean |
 | Privacy | No client records seeded; private pages no-store/noindex; token encryption tested; no real API keys in repository |
-| Real mobile Checkout/live readiness | Not tested/verified; blocked by credentials, Stripe pause, email sender, and final policy/tax decisions |
+| Real mobile Checkout/live readiness | Not tested/verified; blocked by credentials, email sender, API capability verification, and final policy/tax decisions |
 
 Screenshots/results are local in ignored test-results. Live databases start with zero appointments/bookings. No real client data or simulated client photos were published.
 
@@ -53,12 +53,12 @@ GitHub Actions is configured to verify main/PRs and deploy main through a reposi
 
 ## Exact owner actions
 
-1. Resolve Payments paused at https://dashboard.stripe.com/acct_1UOWNwCXm8prgzws/account/status ; contact Stripe support if it continues to show no actionable requirements. Do not reuse Grailed.
+1. Review any further requirements Stripe Support identifies. The latest live account status shows Payments and Payouts active; no action to remove a general payment pause is currently shown. Do not reuse Grailed.
 2. Authorize Blaze Vizionz through the Stripe plugin account-management link, then confirm completion. This connection is separate from submitting Stripe legal onboarding.
 3. Provide/approve a public studio contact email, cancellation/rescheduling/refund rules, delivery deadline, image-usage and privacy/retention terms, and Texas tax treatment/registration. Draft is private and not published as active client terms.
-4. Securely configure correct sandbox Stripe restricted key/webhook secret, verified email sender/API secret, and encryption secret in Cloudflare (never chat/GitHub). Then run real sandbox deposits/balances, signed events/retries, email delivery, reminders, conflicts, and mobile Checkout. Production receives separate credentials only after the paused account is ready.
+4. Securely configure correct sandbox Stripe restricted key/webhook secret, verified email sender/API secret, and encryption secret in Cloudflare (never chat/GitHub). Then run real sandbox deposits/balances, signed events/retries, email delivery, reminders, conflicts, and mobile Checkout. Production receives separate credentials with account capability verification before launch.
 5. Configure the repository CLOUDFLARE_API_TOKEN secret or repair the Cloudflare GitHub installation for automatic builds. Token permissions/account restriction are described in README.
 6. Sign in to https://blazevisionz.com/admin.html using the authorized owner email; enter actual security/family/B4US blocks and release actual dates after launch approval.
-7. Supply actual portfolio photography and permission records; choose a private gallery provider and verify its sharing controls. Custom domain is optional; the deployed workers.dev site already uses HTTPS.
+7. Supply actual portfolio photography and permission records; choose a private gallery provider and verify its sharing controls. The registered custom domain is already deployed with HTTPS.
 
 The public booking lock stays in place until all launch checks are evidenced. Flipping configuration flags alone does not complete testing or legal/account verification.
