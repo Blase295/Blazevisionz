@@ -55,6 +55,24 @@ async function createBooking(request,env) {
   await query(env,'UPDATE bookings SET checkout_id=? WHERE id=?',session.id,booking.id).run();
   return json({url:session.url},201);
 }
+async function createInquiry(request,env) {
+  const data=await body(request);
+  const types={'fashion-editorial':'Fashion + Editorial','local-business':'Local Business',event:'Event'};
+  if(!types[data.type] || typeof data.name!=='string' || !data.name.trim() || data.name.length>100 || typeof data.email!=='string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email) || data.email.length>254 || typeof data.phone!=='string' || !data.phone.trim() || data.phone.length>40) fail('Choose an inquiry type and enter valid contact details');
+  if(data.date && (typeof data.date!=='string' || !/^\d{4}-\d\d-\d\d$/.test(data.date)))fail('Use a valid target date');
+  for(const [field,limit] of [['location',1000],['objectives',2000],['scope',3000]])if(typeof data[field]!=='string' || !data[field].trim() || data[field].length>limit)fail('Complete the consultation inquiry details');
+  const inquiry={id:crypto.randomUUID(),type:data.type,name:data.name.trim(),email:data.email.trim().toLowerCase(),phone:data.phone.trim(),target_date:data.date||null,location:data.location.trim(),objectives:data.objectives.trim(),scope:data.scope.trim(),created:now()};
+  let emailQueued=false;
+  if(env.DB)await query(env,'INSERT INTO inquiries(id,type,name,email,phone,target_date,location,objectives,scope,created,email_queued) VALUES(?,?,?,?,?,?,?,?,?,?,0)',inquiry.id,inquiry.type,inquiry.name,inquiry.email,inquiry.phone,inquiry.target_date,inquiry.location,inquiry.objectives,inquiry.scope,inquiry.created).run();
+  if(env.RESEND_API_KEY && env.EMAIL_FROM && env.CONTACT_EMAIL && env.ADMIN_EMAIL) {
+    const text=`Blazing Visuals / Blazevisionz\n\nConsultation inquiry: ${types[inquiry.type]}\nName: ${inquiry.name}\nEmail: ${inquiry.email}\nPhone: ${inquiry.phone}\nTarget date: ${inquiry.target_date||'Not provided'}\nLocation / venue: ${inquiry.location}\n\nProject objectives:\n${inquiry.objectives}\n\nDeliverables, people/models, usage, video, logistics, and budget:\n${inquiry.scope}\n\nPolicy: required consultation -> written scope and quote -> agreement -> retainer -> confirmed booking. Do not send a payment or booking path before scope approval.`;
+    const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+env.RESEND_API_KEY,'Content-Type':'application/json','Idempotency-Key':'inquiry-'+inquiry.id},body:JSON.stringify({from:env.EMAIL_FROM,to:[env.ADMIN_EMAIL],reply_to:inquiry.email,subject:'Blazevisionz consultation inquiry — '+types[inquiry.type],text})});
+    if(!response.ok)fail('Inquiry saved, but email delivery is not configured. Please try again later.',503);
+    emailQueued=true;
+    if(env.DB)await query(env,'UPDATE inquiries SET email_queued=1 WHERE id=?',inquiry.id).run();
+  }
+  return json({saved:true,emailQueued},202);
+}
 export async function processPaid(env,session,eventId) {
   const id=session.metadata?.booking_id;const kind=session.metadata?.kind;
   if(!id || !['deposit','balance'].includes(kind))return;
@@ -194,6 +212,7 @@ export async function handle(request,env) {
     if(path==='/api/webhook' && request.method==='POST')return await webhook(request,env);
     if(!['GET','POST'].includes(request.method))fail('Method not allowed',405);
     if(request.method==='POST' && request.headers.get('Origin')!==new URL(request.url).origin)fail('Same-origin request required',403);
+    if(path==='/api/inquiries' && request.method==='POST')return await createInquiry(request,env);
     if(path==='/api/bookings' && request.method==='POST')return await createBooking(request,env);
     if(path==='/api/admin' || path.startsWith('/api/admin/'))return await adminRoute(request,env,path);
     if(path==='/api/client' || path.startsWith('/api/client/'))return await clientRoute(request,env,path);

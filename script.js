@@ -5,6 +5,9 @@ const form = document.getElementById('booking-form');
 const select = document.getElementById('slot');
 const status = document.getElementById('booking-status');
 const button = document.getElementById('checkout');
+const inquiryForm = document.getElementById('inquiry-form');
+const inquiryStatus = document.getElementById('inquiry-status');
+const inquiryButton = document.getElementById('inquiry-submit');
 let enabled = false;
 let termsVersion = null;
 async function availability() {
@@ -36,6 +39,9 @@ document.querySelectorAll('[data-package]').forEach(item => item.addEventListene
   document.getElementById('package').focus({preventScroll:true});
   availability();
 }));
+document.querySelectorAll('[data-inquiry-type]').forEach(item => item.addEventListener('click', () => {
+  document.getElementById('inquiry-type').value = item.dataset.inquiryType;
+}));
 form.addEventListener('submit', async event => {
   event.preventDefault();
   if (!enabled) return;
@@ -51,6 +57,22 @@ form.addEventListener('submit', async event => {
   } catch (error) {
     status.textContent = error.message;
     button.disabled = false;
+  }
+});
+inquiryForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  inquiryButton.disabled = true;
+  inquiryStatus.textContent = 'Sending your consultation inquiry...';
+  try {
+    const response = await fetch('/api/inquiries', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(inquiryForm)))});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Unable to send this inquiry.');
+    inquiryForm.reset();
+    inquiryStatus.textContent = data.emailQueued ? 'Inquiry received. Blazevisionz will review scope before any quote, agreement, retainer, or booking.' : 'Inquiry saved for review. No payment or booking was created.';
+  } catch (error) {
+    inquiryStatus.textContent = error.message;
+  } finally {
+    inquiryButton.disabled = false;
   }
 });
 if (new URLSearchParams(location.search).has('checkout')) {
