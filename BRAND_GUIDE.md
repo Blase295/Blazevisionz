@@ -14,10 +14,10 @@
 
 ## Launch offers — Founding 20
 - Essential: $100 / 30 minutes / 3 edited JPEGs / $30 deposit.
-- Signature: $150 / 60 minutes / 5 edited JPEGs / $45 deposit.
+- Signature: $125 / 60 minutes / 5 edited JPEGs / deposit to be confirmed before publication.
 - One person and one location per session; Essential one outfit, Signature up to two outfits.
 - 10-minute phone consultation only after deposit and creative intake.
-- RAWs excluded. Extra edited image $20. Studio rental and travel beyond local zone quoted separately.
+- RAW collection is a $50 add-on for one-time personal sessions. Monthly Edit includes all technically usable RAWs and 7 edited JPEGs for $125/month, with the founding rate locked during continuous eligible membership. Extra edited image $20. Studio rental and travel beyond local zone quoted separately.
 - Final payment due by the end of the session; proofs are watermarked JPEG previews.
 - Final delivery target: 3 business days after client selections.
 - Client consent required before promotional portfolio use.
@@ -48,3 +48,14 @@ Bookings ↓
 
 Suggested highlights: WORK / BTS / SESSIONS / REVIEWS / BOOK.
 Use only verified portfolio work and actual customer reviews.
+
+## Commercial and event consultation policy — agreed
+- **Every Fashion & Editorial, Local Business, and Event booking requires a complimentary consultation before any booking is confirmed or retainer is collected.**
+- Fashion & Editorial: 20-minute mandatory pre-booking consultation.
+- Local Business: 15-minute mandatory pre-booking consultation.
+- Events: 15–20-minute mandatory pre-booking consultation.
+- Flow: project inquiry -> required consultation -> written scope and quote -> agreement -> retainer -> confirmed booking.
+- Collect project objectives, date, location(s), deliverables, number of people/models, licensing, video expectations, logistics, and budget before quoting.
+- Personal sessions retain their separate post-deposit 10-minute phone consultation process.
+- Fashion Campaign Production agreed specification: $450, 2-hour shoot, 2 locations, 12 edits, up to 3 looks and 2 models, 20-minute consultation, mood board and shot list; travel between locations counts toward shoot time; location distance and expenses scoped in advance.
+- Event prices and deliverables remain proposals until separately approved.
