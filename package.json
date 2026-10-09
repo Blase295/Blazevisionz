@@ -5,8 +5,9 @@
   "scripts": {
     "build": "node tools/build.mjs",
     "test": "node --test tests/*.test.mjs",
-    "dev": "npm run build && wrangler pages dev dist",
-    "types": "wrangler types"
+    "dev": "npm run build && wrangler dev --config wrangler.worker.jsonc",
+    "types": "wrangler types",
+    "dev:pages": "npm run build && wrangler pages dev dist"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

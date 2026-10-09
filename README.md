@@ -20,7 +20,7 @@ npx wrangler d1 migrations apply blazevisionz-preview --local
 npm run dev
 ```
 
-Local simulation uses Cloudflare Pages Functions. Primary deployment uses a Worker with static assets, D1, rate limiting, signed Cloudflare Access owner authentication, and scheduled email/hold processing.
+Local development and primary deployment use a Worker with static assets, D1, rate limiting, signed Cloudflare Access owner authentication, and scheduled email/hold processing.
 
 ```sh
 npx wrangler deploy --config wrangler.worker.jsonc --dry-run
