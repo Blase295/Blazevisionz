@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "blazevisionz",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-10-09",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {"ENVIRONMENT":"preview","PAYMENTS_ENABLED":"false","STRIPE_LIVE":"false","TERMS_APPROVED":"false","LAUNCH_TESTS_PASSED":"false"},
+  "d1_databases": [{"binding":"DB","database_name":"blazevisionz-preview","database_id":"5d692580-632e-4687-bab0-0ff3fe6f017c","migrations_dir":"migrations"}]
+}
+

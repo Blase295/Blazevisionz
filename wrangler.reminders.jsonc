@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "blazevisionz-preview-reminders",
+  "main": "src/reminders.mjs",
+  "compatibility_date": "2026-10-09",
+  "compatibility_flags": ["nodejs_compat"],
+  "triggers": {"crons":["*/10 * * * *"]},
+  "observability": {"enabled":true},
+  "vars": {"ENVIRONMENT":"preview","PAYMENTS_ENABLED":"false","STRIPE_LIVE":"false"},
+  "d1_databases": [{"binding":"DB","database_name":"blazevisionz-preview","database_id":"5d692580-632e-4687-bab0-0ff3fe6f017c"}]
+}
+

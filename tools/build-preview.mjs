@@ -1,0 +1,9 @@
+import {readFile,writeFile} from 'node:fs/promises';
+import {build} from 'esbuild';
+const files=['index.html','styles.css','script.js','admin.html','admin.js','client.html','client.js'];
+const assets={};
+for(const file of files)assets['/'+file]={body:await readFile(file,'utf8'),type:file.endsWith('.html')?'text/html; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8'};
+const input=`import {handle} from './src/api.mjs';import {maintenance} from './src/operations.mjs';const assets=${JSON.stringify(assets)};export default {async fetch(request,env){const path=new URL(request.url).pathname;if(path.startsWith('/api/'))return handle(request,env);if(!['GET','HEAD'].includes(request.method))return new Response('Method not allowed',{status:405});const asset=assets[path==='/'?'/index.html':path];const headers={'Content-Type':asset?.type||'text/plain','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Permissions-Policy':'camera=(), microphone=(), geolocation=()','Content-Security-Policy':\"default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'\"};if(path.startsWith('/admin')||path.startsWith('/client')){headers['Cache-Control']='no-store';headers['X-Robots-Tag']='noindex, nofollow';}return new Response(request.method==='HEAD'?null:asset?.body||'Not found',{status:asset?200:404,headers});},async scheduled(controller,env,ctx){ctx.waitUntil(maintenance(env));}};`;
+const result=await build({stdin:{contents:input,resolveDir:process.cwd(),sourcefile:'preview-entry.mjs'},bundle:true,minify:true,format:'esm',platform:'browser',target:'es2022',write:false,external:['node:*']});
+await writeFile('.wrangler/preview-bundle.mjs',result.outputFiles[0].text);
+console.log('Preview bundle bytes: '+result.outputFiles[0].text.length);

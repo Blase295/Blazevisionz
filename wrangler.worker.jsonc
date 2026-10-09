@@ -1,0 +1,93 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "blazevisionz-preview",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-10-09",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/api/*"
+    ]
+  },
+  "observability": {
+    "enabled": true
+  },
+  "triggers": {
+    "crons": [
+      "*/10 * * * *"
+    ]
+  },
+  "vars": {
+    "ENVIRONMENT": "preview",
+    "PAYMENTS_ENABLED": "false",
+    "STRIPE_LIVE": "false",
+    "TERMS_APPROVED": "false",
+    "TAX_REVIEW_COMPLETE": "false",
+    "LAUNCH_TESTS_PASSED": "false",
+    "EXPECTED_STRIPE_ACCOUNT": "acct_1UOWNwCXm8prgzws",
+    "SITE_URL": "https://blazevisionz-preview.blazevisionz.workers.dev",
+    "ACCESS_TEAM_DOMAIN": "blazevisionz.cloudflareaccess.com",
+    "ACCESS_AUD": "e94b8730931fc86d94005ea709ff3a965172cc08f306cdd25c2515f5d5c05b20",
+    "ADMIN_EMAIL": "blase295@gmail.com",
+    "STRIPE_PAYMENT_CONFIGURATION": "pmc_1UOWl1CXm8prgzwsFcsPRVxg"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "blazevisionz-preview",
+      "database_id": "5d692580-632e-4687-bab0-0ff3fe6f017c",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "BOOKING_LIMITER",
+      "namespace_id": "1001",
+      "simple": {
+        "limit": 5,
+        "period": 60
+      }
+    }
+  ],
+  "env": {
+    "production": {
+      "name": "blazevisionz",
+      "vars": {
+        "ENVIRONMENT": "production",
+        "PAYMENTS_ENABLED": "false",
+        "STRIPE_LIVE": "false",
+        "TERMS_APPROVED": "false",
+        "TAX_REVIEW_COMPLETE": "false",
+        "LAUNCH_TESTS_PASSED": "false",
+        "EXPECTED_STRIPE_ACCOUNT": "acct_1UOWNwCXm8prgzws",
+        "SITE_URL": "https://blazevisionz.blazevisionz.workers.dev",
+        "ACCESS_TEAM_DOMAIN": "blazevisionz.cloudflareaccess.com",
+        "ACCESS_AUD": "ecefe84002b89bd0db182683947c6fe5a750b5ecb4de83ef1539aa683a8f0e45",
+        "ADMIN_EMAIL": "blase295@gmail.com",
+        "STRIPE_PAYMENT_CONFIGURATION": ""
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "blazevisionz-production",
+          "database_id": "9c90b1ee-8249-4705-88cc-6d4a287d1d6c",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "ratelimits": [
+        {
+          "name": "BOOKING_LIMITER",
+          "namespace_id": "1002",
+          "simple": {
+            "limit": 5,
+            "period": 60
+          }
+        }
+      ]
+    }
+  }
+}
