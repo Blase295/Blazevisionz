@@ -21,7 +21,7 @@ Correct separate account: `acct_1UOWNwCXm8prgzws` (Blaze Vizionz).
 
 Test services: Essential $100/$30 deposit/$70 balance; Signature $150/$45 deposit/$105 balance; additional edited image $20. Product/price IDs: [STRIPE_SETUP.md](STRIPE_SETUP.md).
 
-Verified card-only test configuration: `pmc_1UOWl1CXm8prgzwsFcsPRVxg`. Cards enabled; 37 other methods disabled. The shared test default was also made card-only for owner-review deposit links. Live configurations unchanged. Preview config contains this public identifier; no API credential is installed.
+Verified card-only test configuration: `pmc_1UOWl1CXm8prgzwsFcsPRVxg`. Cards enabled; 37 other methods disabled. The shared test default was also made card-only for owner-review deposit links. Live configurations unchanged. Owner-approved restricted test key created and used successfully for real sandbox API verification; deployment secret installation and webhook setup are in progress. No live credentials created.
 
 Plugin still exposes only Grailed at the last refresh. Owner must authorize the separate account before further plugin account operations.
 
@@ -31,6 +31,7 @@ Plugin still exposes only Grailed at the last refresh. Owner must authorize the 
 | --- | --- |
 | Backend tests | 21 booking tests and 5 voice tests passed; actual SQLite constraints plus Stripe SDK signature verification and mocked provider APIs |
 | Amounts | Essential 3000+7000=10000 cents; Signature 4500+10500=15000 cents |
+| Real Stripe sandbox API | Correct account and card-only configuration verified; both deposit Checkout Sessions created with correct metadata/amounts and expired at Stripe; unpaid holds and duplicate rejection passed against isolated local SQLite. No card submitted or deployed webhook delivery demonstrated |
 | Double booking/conflicts | Active unique slot, weekly limit, protected commitments/buffers, unavailable/short slots, occupied slot closure, and rescheduling checks pass |
 | Webhooks | Genuine local HMAC-signed event accepted after mocked Stripe retrieval; forged signatures and wrong amount/currency/mode/session/unpaid states rejected; duplicate events do not duplicate confirmation outbox |
 | Canceled/failed payments | Unpaid never confirms; expired slot can be reused; late payment against expired reservation requires owner review. Real sandbox canceled/declined Checkout still pending |
