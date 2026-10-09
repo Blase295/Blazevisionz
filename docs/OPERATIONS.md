@@ -2,11 +2,11 @@
 
 ## Current deployment
 
-Website: https://blazevisionz.blazevisionz.workers.dev
+Website: https://blazevisionz.com
 
 Preview: https://blazevisionz-preview.blazevisionz.workers.dev
 
-Owner schedule: https://blazevisionz.blazevisionz.workers.dev/admin.html
+Owner schedule: https://blazevisionz.com/admin.html
 
 Cloudflare account: `6e87eeb946761a41b98f852ec548e81a`. Preview D1: `5d692580-632e-4687-bab0-0ff3fe6f017c`. Only Blazevisionz resources are used. No B4US repository or Grailed configuration is part of this application.
 

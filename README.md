@@ -2,7 +2,7 @@
 
 Editorial photography website and private booking operations for Spring / Houston, Texas. The original HTML/CSS aesthetic is preserved; genuine photography placeholders remain until the owner supplies images.
 
-**Website:** https://blazevisionz.blazevisionz.workers.dev
+**Website:** https://blazevisionz.com
 
 **Preview:** https://blazevisionz-preview.blazevisionz.workers.dev
 

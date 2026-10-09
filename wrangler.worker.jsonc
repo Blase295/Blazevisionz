@@ -64,7 +64,7 @@
         "TAX_REVIEW_COMPLETE": "false",
         "LAUNCH_TESTS_PASSED": "false",
         "EXPECTED_STRIPE_ACCOUNT": "acct_1UOWNwCXm8prgzws",
-        "SITE_URL": "https://blazevisionz.blazevisionz.workers.dev",
+        "SITE_URL": "https://blazevisionz.com",
         "ACCESS_TEAM_DOMAIN": "blazevisionz.cloudflareaccess.com",
         "ACCESS_AUD": "ecefe84002b89bd0db182683947c6fe5a750b5ecb4de83ef1539aa683a8f0e45",
         "ADMIN_EMAIL": "blase295@gmail.com",
@@ -86,6 +86,16 @@
             "limit": 5,
             "period": 60
           }
+        }
+      ],
+      "routes": [
+        {
+          "pattern": "blazevisionz.com",
+          "custom_domain": true
+        },
+        {
+          "pattern": "www.blazevisionz.com",
+          "custom_domain": true
         }
       ]
     }

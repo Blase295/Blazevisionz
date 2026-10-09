@@ -4,12 +4,13 @@
 
 - Inspected and preserved index.html, styles.css, script.js, README.md, and BRAND_GUIDE.md. Removed outdated Square guidance.
 - Refined the original editorial site with accurate package/balance details, accessible controls, about/portfolio/booking/process/FAQ/contact-status/policy sections, and genuine portfolio placeholders.
-- Deployed the website: https://blazevisionz.blazevisionz.workers.dev . Separate preview: https://blazevisionz-preview.blazevisionz.workers.dev . HTTPS verified on both.
+- Deployed the website: https://blazevisionz.com . Separate preview: https://blazevisionz-preview.blazevisionz.workers.dev . HTTPS verified on both.
 - Separate production and preview Workers, D1 databases, Access owner applications, rate-limit namespaces, and ten-minute scheduled maintenance. Deployed source is an API-uploaded bundled equivalent of the checked-in Worker/static-assets build.
 - Owner scheduling UI: individual dates/times, commitments, preparation/travel buffers, six-session cap, two protected B4US blocks before publishing a week, and cancellation/rescheduling controls. No dates were automatically opened.
 - Booking backend: exclusive holds, server-owned deposit amounts, Stripe Checkout adapter, signed webhook verification, account/mode/session/amount checks, idempotent confirmation, private paid-client intake and ten-minute consultations, balance Checkout, proof/delivery links, image selections, consent tracking, and transactional email outbox.
 - Operations documentation, private proposed terms, Stripe catalog IDs, test suite, local development tools, security headers, and GitHub Actions main-branch deployment workflow.
 - Separate Stripe account prepared through plugin inspection and browser setup. Owner submitted legal onboarding. Customer-facing name Blazing Visuals, website production URL, Photography studios category, and BLAZING VISUALS descriptor saved. Three test products/seven prices and dedicated card-only test configuration created.
+- Connected the registered blazevisionz.com domain and www.blazevisionz.com to the production Worker. Extended owner-only Access protection to both domains; production booking links use the apex domain. TLS certificates, homepage 200, admin Access redirects, private-client rejection, and disabled checkout/webhooks verified on both hosts. Mobile/tablet/desktop accessibility checks passed on the apex domain. Public DNS resolves through 1.1.1.1; validation used its returned IP while the local resolver cached the earlier missing domain.
 - Grailed and B4US were untouched.
 
 ## Stripe status
@@ -57,7 +58,7 @@ GitHub Actions is configured to verify main/PRs and deploy main through a reposi
 3. Provide/approve a public studio contact email, cancellation/rescheduling/refund rules, delivery deadline, image-usage and privacy/retention terms, and Texas tax treatment/registration. Draft is private and not published as active client terms.
 4. Securely configure correct sandbox Stripe restricted key/webhook secret, verified email sender/API secret, and encryption secret in Cloudflare (never chat/GitHub). Then run real sandbox deposits/balances, signed events/retries, email delivery, reminders, conflicts, and mobile Checkout. Production receives separate credentials only after the paused account is ready.
 5. Configure the repository CLOUDFLARE_API_TOKEN secret or repair the Cloudflare GitHub installation for automatic builds. Token permissions/account restriction are described in README.
-6. Sign in to https://blazevisionz.blazevisionz.workers.dev/admin.html using the authorized owner email; enter actual security/family/B4US blocks and release actual dates after launch approval.
+6. Sign in to https://blazevisionz.com/admin.html using the authorized owner email; enter actual security/family/B4US blocks and release actual dates after launch approval.
 7. Supply actual portfolio photography and permission records; choose a private gallery provider and verify its sharing controls. Custom domain is optional; the deployed workers.dev site already uses HTTPS.
 
 The public booking lock stays in place until all launch checks are evidenced. Flipping configuration flags alone does not complete testing or legal/account verification.
