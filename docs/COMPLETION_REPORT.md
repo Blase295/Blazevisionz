@@ -21,7 +21,7 @@ Correct separate account: `acct_1UOWNwCXm8prgzws` (Blaze Vizionz).
 
 Test services: Essential $100/$30 deposit/$70 balance; Signature $150/$45 deposit/$105 balance; additional edited image $20. Product/price IDs: [STRIPE_SETUP.md](STRIPE_SETUP.md).
 
-Verified card-only test configuration: `pmc_1UOWl1CXm8prgzwsFcsPRVxg`. Cards enabled; 37 other methods disabled. The shared test default was also made card-only for owner-review deposit links. Live configurations unchanged. Owner-approved restricted test key created and used successfully for real sandbox API verification; deployment secret installation and webhook setup are in progress. No live credentials created.
+Verified card-only test configuration: `pmc_1UOWl1CXm8prgzwsFcsPRVxg`. Cards enabled; 37 other methods disabled. The shared test default was also made card-only for owner-review deposit links. Live configurations unchanged. Owner-approved restricted test key created and used successfully for real sandbox API verification, then installed as an encrypted Cloudflare preview secret. Webhook creation is prepared and awaiting owner confirmation. No live credentials created.
 
 Plugin still exposes only Grailed at the last refresh. Owner must authorize the separate account before further plugin account operations.
 
