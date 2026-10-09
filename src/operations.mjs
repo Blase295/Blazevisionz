@@ -1,9 +1,11 @@
 import {query,stripe,processPaid,enqueue} from './api.mjs';
 import {PACKAGES,cryptToken} from './domain.mjs';
+import {voiceMaintenance} from './voice.mjs';
 const now=()=>Math.floor(Date.now()/1000);
 const format=epoch=>new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',dateStyle:'full',timeStyle:'short'}).format(new Date(epoch*1000));
 export async function maintenance(env) {
   if(!env.DB)return;
+  try{await voiceMaintenance(env);}catch{console.error('Voice reminder maintenance failed; inspect Twilio configuration');}
   if(env.STRIPE_SECRET_KEY && env.EXPECTED_STRIPE_ACCOUNT) {
     const account=await stripe(env).accounts.retrieve();if(account.id!==env.EXPECTED_STRIPE_ACCOUNT)throw new Error('Wrong Stripe account');
     const holds=(await query(env,"SELECT * FROM bookings WHERE status='held' AND expires<? LIMIT 50",now()).all()).results;

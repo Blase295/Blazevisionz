@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import {voiceReady} from './voice.mjs';
 import { PACKAGES, localParts, localDate, weekOf, chicagoEpoch, paidSessionMatches, digest, cryptToken } from './domain.mjs';
 const now = () => Math.floor(Date.now()/1000);
 const json = (value,status=200) => Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
@@ -113,13 +114,16 @@ async function clientRoute(request,env,path) {
     const slot=await query(env,'SELECT start FROM slots WHERE id=?',booking.slot_id).first();
     const consult=await query(env,'SELECT s.start FROM consultations c JOIN slots s ON s.id=c.slot_id WHERE c.booking_id=?',booking.id).first();
     const slots=booking.intake&&!consult?(await query(env,"SELECT id,start FROM slots WHERE kind='consult' AND open=1 AND start>? AND start<? AND NOT EXISTS(SELECT 1 FROM consultations WHERE slot_id=slots.id) ORDER BY start",now(),slot.start).all()).results:[];
-    return json({package:p.name,start:slot.start,name:booking.name,email:booking.email,consent:!!booking.consent,intake:booking.intake?JSON.parse(booking.intake):null,consult,slots,balance:p.balance/100,balancePaid:!!booking.balance_paid,proofUrl:booking.proof_url,deliveryUrl:booking.balance_paid?booking.delivery_url:null});
+    return json({voiceRemindersAvailable:voiceReady(env),package:p.name,start:slot.start,name:booking.name,email:booking.email,consent:!!booking.consent,intake:booking.intake?JSON.parse(booking.intake):null,consult,slots,balance:p.balance/100,balancePaid:!!booking.balance_paid,proofUrl:booking.proof_url,deliveryUrl:booking.balance_paid?booking.delivery_url:null});
   }
   const data=await body(request);
   if(path.endsWith('/intake')) {
     const fields=['name','email','phone','purpose','aesthetic','inspiration','outfits','location','posing','requests','usage'];const intake={};
     for(const field of fields){if(typeof data[field]!=='string' || data[field].length>2000)fail('Invalid intake');intake[field]=data[field].trim();}
     if(['name','email','phone','purpose','aesthetic','location','usage'].some(field=>!intake[field]))fail('Complete required intake fields');
+    intake.voiceReminderConsent=voiceReady(env) && data.voiceReminderConsent===true;
+    intake.voiceReminderConsentUpdated=now();
+    if(intake.voiceReminderConsent && !/^\+1[2-9]\d{9}$/.test(intake.phone))fail('For automated call reminders, use +1 followed by your ten-digit US phone number');
     await query(env,'UPDATE bookings SET intake=?,consent=?,consent_updated=? WHERE id=?',JSON.stringify(intake),data.portfolioPermission===true?1:0,now(),booking.id).run();
     await enqueue(env,booking.id+'-intake-'+crypto.randomUUID(),booking.id,'owner_brief');
   } else if(path.endsWith('/consult')) {

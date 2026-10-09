@@ -33,7 +33,10 @@
     "ACCESS_TEAM_DOMAIN": "blazevisionz.cloudflareaccess.com",
     "ACCESS_AUD": "e94b8730931fc86d94005ea709ff3a965172cc08f306cdd25c2515f5d5c05b20",
     "ADMIN_EMAIL": "blase295@gmail.com",
-    "STRIPE_PAYMENT_CONFIGURATION": "pmc_1UOWl1CXm8prgzwsFcsPRVxg"
+    "STRIPE_PAYMENT_CONFIGURATION": "pmc_1UOWl1CXm8prgzwsFcsPRVxg",
+    "TWILIO_ENABLED": "false",
+    "TWILIO_LAUNCH_APPROVED": "false",
+    "TWILIO_TESTS_PASSED": "false"
   },
   "d1_databases": [
     {
@@ -68,7 +71,10 @@
         "ACCESS_TEAM_DOMAIN": "blazevisionz.cloudflareaccess.com",
         "ACCESS_AUD": "ecefe84002b89bd0db182683947c6fe5a750b5ecb4de83ef1539aa683a8f0e45",
         "ADMIN_EMAIL": "blase295@gmail.com",
-        "STRIPE_PAYMENT_CONFIGURATION": ""
+        "STRIPE_PAYMENT_CONFIGURATION": "",
+        "TWILIO_ENABLED": "false",
+        "TWILIO_LAUNCH_APPROVED": "false",
+        "TWILIO_TESTS_PASSED": "false"
       },
       "d1_databases": [
         {
