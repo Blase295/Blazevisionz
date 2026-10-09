@@ -20,11 +20,11 @@ Website: https://blazevisionz.com . Professional photography description and Pho
 | Signature | prod_VPLL4fptG4pEUw | Balance | 105 | price_1UOWfcCXm8prgzws3Q9WkBvn |
 | Additional edited image | prod_VPLMLh6kVt6CzS | One image | 20 | price_1UOWfyCXm8prgzwswINqqf6t |
 
-All prices are one-time and test-only. No subscriptions, public payment links, or live products were created. Backend currently uses server-owned inline price_data with the same approved amounts, not frontend-submitted price IDs. Catalog IDs provide an audit record; a later switch to catalog prices must validate mode and amount.
+All prices are one-time and test-only. Two owner-review test deposit links have now been created (see TEST_CHECKOUT.md); no subscriptions, production payment links, or live products were created. Backend currently uses server-owned inline price_data with the same approved amounts, not frontend-submitted price IDs. Catalog IDs provide an audit record; a later switch to catalog prices must validate mode and amount.
 
 ## BNPL investigation
 
-Dedicated card-only TEST configuration verified: `pmc_1UOWl1CXm8prgzwsFcsPRVxg`, named Blazevisionz deposits and balances. Enabled: Cards only. Disabled: 37 other methods, including Link, BNPL, and bank payments. Default configuration `pmc_1UOWOWCXm8prgzwsGnAg3dG8` and live settings were untouched.
+Dedicated card-only TEST configuration verified: `pmc_1UOWl1CXm8prgzwsFcsPRVxg`, named Blazevisionz deposits and balances. Enabled: Cards only. Disabled: 37 other methods, including Link, BNPL, and bank payments. The shared TEST default configuration `pmc_1UOWOWCXm8prgzwsGnAg3dG8` was also reduced to Cards only so browser-created test Payment Links exclude BNPL/bank/wallet methods. Verified Enabled 1 / Disabled 37 / Requires action 0. Live settings were untouched.
 
 Eligibility is account-, category-, country-, amount-, and payment-method-specific. Stripe documentation notes account review and prohibited/restricted categories, including pre-orders for Afterpay. Scheduled photography deposits need explicit eligibility confirmation; no account-specific Afterpay/Klarna/Affirm approval has been verified.
 
