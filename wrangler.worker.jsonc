@@ -70,6 +70,8 @@
         "LAUNCH_TESTS_PASSED": "false",
         "EXPECTED_STRIPE_ACCOUNT": "acct_1UOWNwCXm8prgzws",
         "SITE_URL": "https://blazevisionz.com",
+        "EMAIL_FROM": "Blazevisionz <bookings@mail.blazevisionz.com>",
+        "CONTACT_EMAIL": "blase295@gmail.com",
         "ACCESS_TEAM_DOMAIN": "blazevisionz.cloudflareaccess.com",
         "ACCESS_AUD": "ecefe84002b89bd0db182683947c6fe5a750b5ecb4de83ef1539aa683a8f0e45",
         "ADMIN_EMAIL": "blase295@gmail.com",
