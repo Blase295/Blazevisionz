@@ -85,7 +85,13 @@ async function pendingCheckout(request,env) {
   const booking=await query(env,"SELECT * FROM bookings WHERE token_hash=? AND email_verified IS NOT NULL AND status='held' AND expires>?",await digest(token),now()).first();
   if(!booking)fail('Verified active reservation required',403);
   if(!await readiness(env,!!booking.sandbox))fail('Checkout unavailable',503);
-  // Stable booking/expiry + idempotency key make a timeout safe to retry.
+  // Fix the Checkout expiry on its first attempt, allowing time on the verified page.
+  // Retries reuse this expiry and idempotency key, including unknown network outcomes.
+  await query(env,'INSERT OR IGNORE INTO checkout_attempts(id,expires) VALUES(?,?)','deposit-'+booking.id,now()+1860).run();
+  const attempt=await query(env,'SELECT expires FROM checkout_attempts WHERE id=?','deposit-'+booking.id).first();
+  const active=await query(env,"UPDATE bookings SET expires=? WHERE id=? AND status='held' AND expires>? RETURNING id",attempt.expires,booking.id,now()).first();
+  if(!active)fail('Reservation expired',409);
+  booking.expires=attempt.expires;
   const session=booking.checkout_id?await stripe(env).checkout.sessions.retrieve(booking.checkout_id):await stripe(env).checkout.sessions.create(checkoutParams(env,booking,'deposit'),{idempotencyKey:'deposit-'+booking.id});
   if(session.livemode!==(env.STRIPE_LIVE==='true'))fail('Wrong payment environment',409);
   await query(env,'UPDATE bookings SET checkout_id=? WHERE id=? AND checkout_id IS NULL',session.id,booking.id).run();

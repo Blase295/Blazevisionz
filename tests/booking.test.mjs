@@ -65,7 +65,9 @@ test('email ownership is required before Stripe checkout; link is one-time and r
   const rawToken=text.match(/verify.html#([a-f0-9-]+)/)[1];assert.equal(rawToken.length,72);assert.equal(db.prepare('SELECT token_hash FROM email_verifications').get().token_hash,await digest(rawToken));
   const verified=await handle(post('/api/email/verify',{token:rawToken}),env);assert.equal(verified.status,200);assert.equal((await verified.json()).checkoutToken,portalToken);
   assert.equal((await handle(post('/api/email/verify',{token:rawToken}),env)).status,403);
-  for(let i=0;i<2;i++)assert.equal((await handle(post('/api/checkout',{},portalToken),env)).status,200);
+  const realNow=Date.now;Date.now=()=>realNow()+120000;
+  try{for(let i=0;i<2;i++)assert.equal((await handle(post('/api/checkout',{},portalToken),env)).status,200);}finally{Date.now=realNow;}
+  assert.ok(db.prepare('SELECT expires FROM checkout_attempts').get().expires>Math.floor(realNow()/1000)+1900);
   const create=calls.filter(c=>c.url==='/v1/checkout/sessions');assert.equal(create.length,1);const params=new URLSearchParams(create[0].options.body);assert.equal(params.get('line_items[0][price_data][unit_amount]'),'3000');assert.equal(params.get('metadata[booking_id]'),booking.id);
   booking=db.prepare('SELECT * FROM bookings').get();assert.ok(booking.email_verified);assert.equal(booking.status,'held');assert.equal(booking.deposit_paid,0);
  });
