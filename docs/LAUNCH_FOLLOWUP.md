@@ -34,6 +34,14 @@ Remote async methods and a real expiration event were not forced in this follow-
 
 Disposable test bookings were canceled after evidence capture; fixture appointments were closed and pending future reminders removed. No real appointment, production commitment, Grailed account, or B4US project was changed. Public and sandbox gates return to false after testing.
 
+## Final preview release check
+
+Preview Worker version `bb1c3ee2-337d-41df-9a18-36ce2efb1495` contains implementation commit `285680e`. GitHub checks for that commit passed; production deployment was correctly skipped for the pull request. The subsequent documentation/tool assertion correction does not change deployed behavior.
+
+Final HTTP checks: availability 200 with payments disabled and no public slots; owner API redirects to Access; unauthenticated customer API returns 401; new booking requests return 503; unsigned webhook requests return 400. Webhook signature checks remain active while new checkout is closed, allowing legitimate outstanding payment events to be processed.
+
+Read-only D1 verification confirmed both new fixture bookings canceled, zero open launch fixture slots, and zero pending fixture emails. The release remains on the existing branch and draft pull request; it has not been merged or deployed to production. Browser access detached during the final PR review, and the GitHub connector was unavailable; public GitHub API checks verified the passing CI result. PR title/body refresh and final release review remain outstanding.
+
 ## Configuration names
 
 Existing secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `TOKEN_ENCRYPTION_KEY`, `RESEND_API_KEY`. Existing variables: `PAYMENTS_ENABLED`, `SANDBOX_CHECKOUT_ENABLED`, `STRIPE_LIVE`, `TERMS_APPROVED`, `TERMS_VERSION`, `TAX_REVIEW_COMPLETE`, `LAUNCH_TESTS_PASSED`, `EMAIL_FROM`, `CONTACT_EMAIL`, `ADMIN_EMAIL`, `EXPECTED_STRIPE_ACCOUNT`, `STRIPE_PAYMENT_CONFIGURATION`, `SITE_URL`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `ENVIRONMENT`. No secret values are included here.

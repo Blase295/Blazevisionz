@@ -1,6 +1,6 @@
 # Blazevisionz client policies — owner review draft
 
-October 21, 2026. Deposit tiers and tax-exclusive pricing are owner approved. The cancellation, delivery, and privacy proposals below are not approved or published. Public checkout stays disabled. This document does not set TERMS_APPROVED.
+October 21, 2026. Deposit tiers, tax-exclusive pricing, and the proof/final turnaround clocks are owner approved. Cancellation/refund terms, remaining delivery details, and privacy proposals still need review. Public checkout stays disabled. This document does not set TERMS_APPROVED.
 
 ## Services and booking
 
@@ -32,7 +32,7 @@ If the studio cancels and no replacement is mutually accepted, refund amounts pa
 
 Late arrival may reduce the available session time because later commitments remain protected. Extra time or costs require agreement. No arbitrary notice deadline or penalty is set by this draft.
 
-## Proposed delivery and revisions — timing needs owner input
+## Delivery and revisions — turnaround approved; remaining details need review
 
 Clients select included photographs from private proofs. Personal final delivery is edited JPEG. RAW delivery applies only where the selected service or agreed add-on includes it. Extra edits and production costs require an approved quote.
 
@@ -48,6 +48,6 @@ Image-use permissions, copyright/license wording, minors' consent, location perm
 
 ## Before publication
 
-Approve or revise these proposals; supply delivery/gallery/retention timings and correction scope; confirm the balance deadline, public business/contact details, and image-license/release wording. Publish versioned terms before payment and record the accepted version and timestamp. Obtain legal/tax advice for enforceability and registration details as needed.
+Approve or revise the remaining proposals; supply gallery/retention periods and correction scope; confirm the balance deadline, public business/contact details, and image-license/release wording. The proof and final delivery turnaround clocks above are already approved. Publish versioned terms before payment and record the accepted version and timestamp. Obtain legal/tax advice for enforceability and registration details as needed.
 
 Official references checked October 21, 2026: [Texas taxable services](https://comptroller.texas.gov/taxes/publications/96-259.php), [Texas sales tax permit FAQ](https://comptroller.texas.gov/taxes/sales/faq/permit.php), [Stripe tax setup](https://docs.stripe.com/tax/set-up).

@@ -9,6 +9,7 @@ for(const [path,method] of [['/api/availability','GET'],['/api/admin','GET'],['/
  if(path==='/api/availability'){assert.equal(response.status(),200);assert.equal(body.paymentsEnabled,false);}
  if(path==='/api/admin')assert.ok([302,401,403].includes(response.status()));
  if(path==='/api/client')assert.equal(response.status(),401);
- if(['/api/bookings','/api/webhook'].includes(path))assert.equal(response.status(),503);
+ if(path==='/api/bookings')assert.equal(response.status(),503);
+ if(path==='/api/webhook')assert.equal(response.status(),400);
 }
 await browser.close();
