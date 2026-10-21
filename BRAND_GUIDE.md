@@ -3,7 +3,7 @@
 ## Brand architecture
 - Public-facing creative identity: **Blazevisionz**
 - Studio/business name: **Blazing Visuals** (confirm legal business details separately)
-- Location: Spring / Houston, Texas
+- Location: Houston, Texas
 - Positioning: Editorial portraits, intentional direction, images that feel like you.
 - Tone: Direct, artistic, confident, collaborative; no invented awards, testimonials, or client work.
 
@@ -43,7 +43,7 @@ Display name: Blazevisionz | Houston Photographer
 Suggested bio:
 Editorial portraits + lifestyle imagery.
 Creative direction in every frame.
-Spring / Houston, TX
+Houston, Texas
 Bookings ↓
 
 Suggested highlights: WORK / BTS / SESSIONS / REVIEWS / BOOK.
