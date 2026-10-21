@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
-import {PACKAGES,chicagoEpoch,weekOf,paidSessionMatches,cryptToken,digest} from '../src/domain.mjs';
+import {CATALOG,PACKAGES,chicagoEpoch,weekOf,paidSessionMatches,cryptToken,digest} from '../src/domain.mjs';
 import {handle,processPaid} from '../src/api.mjs';
 function database(){const db=new DatabaseSync(':memory:');db.exec(readFileSync(new URL('../migrations/0001_booking.sql',import.meta.url),'utf8'));db.exec(readFileSync(new URL('../migrations/0002_terms.sql',import.meta.url),'utf8'));db.exec(readFileSync(new URL('../migrations/0003_protect_closed_slots.sql',import.meta.url),'utf8'));db.exec(readFileSync(new URL('../migrations/0004_commercial_inquiries.sql',import.meta.url),'utf8'));db.exec(readFileSync(new URL('../migrations/0006_email_verification.sql',import.meta.url),'utf8'));return db;}
 function adapter(db){return {prepare(sql){let args=[];const prepared={bind(...values){args=values;return prepared;},async first(){return db.prepare(sql).get(...args)||null;},async all(){return {results:db.prepare(sql).all(...args)};},async run(){return db.prepare(sql).run(...args);}};return prepared;},async batch(statements){db.exec('BEGIN');try{const result=[];for(const statement of statements)result.push(await statement.run());db.exec('COMMIT');return result;}catch(e){db.exec('ROLLBACK');throw e;}}};}
@@ -158,4 +158,13 @@ test('signed non-booking webhook fixtures are acknowledged without granting fulf
   const raw=JSON.stringify({id:'evt_non_booking',type:'checkout.session.completed',livemode:false,data:{object:{id:'cs_fixture_without_booking',metadata:{}}}});const t=Math.floor(Date.now()/1000);const sig=createHmac('sha256',env.STRIPE_WEBHOOK_SECRET).update(t+'.'+raw).digest('hex');
   const response=await handle(new Request('https://example.com/api/webhook',{method:'POST',headers:{'Stripe-Signature':`t=${t},v1=${sig}`},body:raw}),env);assert.equal(response.status,200);assert.deepEqual(await response.json(),{received:true,ignored:true});assert.equal(calls.filter(c=>c.url.includes('checkout')).length,0);assert.equal(db.prepare('SELECT COUNT(*) n FROM bookings').get().n,0);assert.equal(db.prepare('SELECT COUNT(*) n FROM outbox').get().n,0);
  });
+});
+
+
+test('all approved catalog totals and deliverables stay aligned',()=>{
+ assert.deepEqual([CATALOG.essential.total,CATALOG.essential.minutes,CATALOG.essential.images],[10000,30,3]);
+ assert.deepEqual([CATALOG.signature.total,CATALOG.signature.minutes,CATALOG.signature.images],[12500,60,5]);
+ assert.deepEqual([CATALOG.monthly.total,CATALOG.monthly.interval,CATALOG.monthly.minutes,CATALOG.monthly.images,CATALOG.monthly.usableRAWs],[12500,'month',60,7,true]);
+ assert.equal(CATALOG.personalRAW.total,5000);
+ assert.deepEqual([CATALOG.campaign.total,CATALOG.campaign.minutes,CATALOG.campaign.locations,CATALOG.campaign.consultationRequired],[45000,120,2,true]);
 });
