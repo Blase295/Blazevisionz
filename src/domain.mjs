@@ -1,6 +1,12 @@
 export const PACKAGES = Object.freeze({
   essential: Object.freeze({name:'Essential Session', total:10000, deposit:3000, balance:7000, minutes:30, images:3}),
-  signature: Object.freeze({name:'Signature Session', total:15000, deposit:4500, balance:10500, minutes:60, images:5})
+  signature: Object.freeze({name:'Signature Session', total:12500, deposit:null, balance:null, minutes:60, images:5})
+});
+// These catalog entries require distinct, approved sales flows before payment.
+export const CATALOG = Object.freeze({...PACKAGES,
+  monthly: Object.freeze({name:'Monthly Edit',total:12500,interval:'month',minutes:60,images:7,usableRAWs:true}),
+  personalRAW: Object.freeze({name:'Personal full RAW add-on',total:5000}),
+  campaign: Object.freeze({name:'Campaign Production',total:45000,minutes:120,locations:2,consultationRequired:true})
 });
 export function localParts(epoch) {
   return Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit',weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(epoch*1000)).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
@@ -17,7 +23,7 @@ export function chicagoEpoch(value) {
 }
 export function paidSessionMatches(session, booking, kind, live) {
   const p=PACKAGES[booking.package];
-  return Boolean(p && session.mode==='payment' && session.status==='complete' && session.payment_status==='paid' && session.currency==='usd' && session.amount_total===(kind==='deposit'?p.deposit:p.balance) && session.livemode===live && session.metadata?.booking_id===booking.id && session.metadata?.kind===kind && session.id===(kind==='deposit'?booking.checkout_id:booking.balance_checkout_id));
+  return Boolean(p && Number.isInteger(p.deposit) && Number.isInteger(p.balance) && session.mode==='payment' && session.status==='complete' && session.payment_status==='paid' && session.currency==='usd' && session.amount_total===(kind==='deposit'?p.deposit:p.balance) && session.livemode===live && session.metadata?.booking_id===booking.id && session.metadata?.kind===kind && session.id===(kind==='deposit'?booking.checkout_id:booking.balance_checkout_id));
 }
 export async function digest(value) {return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))),b=>b.toString(16).padStart(2,'0')).join('');}
 export async function cryptToken(token, secret, decrypt=false) {

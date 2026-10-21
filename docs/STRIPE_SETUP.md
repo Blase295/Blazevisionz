@@ -1,3 +1,5 @@
+> October 21 update: historical $150 Signature / $45 deposit / $105 balance entries below are superseded and unapproved. Current catalog total is $125; Signature Checkout is blocked until the owner approves the split. Historical test links must not be used. See [current sandbox implementation and verification](SANDBOX_READINESS.md).
+
 # Stripe account and catalog status
 
 Separate account verified in browser: **Blaze Vizionz**, `acct_1UOWNwCXm8prgzws`. Customer-facing name: **Blazing Visuals**. Creative identity: **Blazevisionz**. This is a direct photography business, not a marketplace.

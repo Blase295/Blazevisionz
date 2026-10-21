@@ -5,7 +5,7 @@ import {readFile, mkdir, writeFile} from 'node:fs/promises';
 import {randomBytes} from 'node:crypto';
 import Stripe from 'stripe';
 import {handle} from '../src/api.mjs';
-import {PACKAGES, chicagoEpoch, weekOf} from '../src/domain.mjs';
+import {PACKAGES, chicagoEpoch, weekOf, cryptToken} from '../src/domain.mjs';
 
 async function verify() {
 const expected='acct_1UOWNwCXm8prgzws';
@@ -25,7 +25,7 @@ for(const [method,value] of Object.entries(configuration)) {
 }
 
 const db=new DatabaseSync(':memory:');
-for(const migration of ['0001_booking.sql','0002_terms.sql','0003_protect_closed_slots.sql','0004_commercial_inquiries.sql','0005_voice_reminders.sql']) {
+for(const migration of ['0001_booking.sql','0002_terms.sql','0003_protect_closed_slots.sql','0004_commercial_inquiries.sql','0005_voice_reminders.sql','0006_email_verification.sql']) {
   await readFile(new URL('../migrations/'+migration,import.meta.url),'utf8').then(sql=>db.exec(sql));
 }
 const adapter={prepare(sql){let args=[];const statement={bind(...values){args=values;return statement;},async first(){return db.prepare(sql).get(...args)||null;},async all(){return {results:db.prepare(sql).all(...args)};},async run(){return db.prepare(sql).run(...args);}};return statement;},async batch(statements){db.exec('BEGIN');try{const result=[];for(const statement of statements)result.push(await statement.run());db.exec('COMMIT');return result;}catch(error){db.exec('ROLLBACK');throw error;}}};
@@ -46,10 +46,18 @@ try {
   const availability=await (await handle(request('/api/availability'),env)).json();
   assert.equal(availability.paymentsEnabled,true);
   assert.equal(availability.slots.length,2);
-  for(const [i,pkg] of ['essential','signature'].entries()) {
+  for(const [i,pkg] of ['essential'].entries()) {
     const body={package:pkg,slot:'sandbox-'+i,name:'Sandbox Verification',email:'sandbox@example.com',acceptedTerms:true,termsVersion:env.TERMS_VERSION};
     const response=await handle(request('/api/bookings',body),env);
-    assert.equal(response.status,201,'Real sandbox Checkout creation failed');
+    assert.equal(response.status,202,'Email verification hold creation failed');
+    const initial=db.prepare('SELECT * FROM bookings WHERE slot_id=?').get(body.slot);
+    const verification=db.prepare('SELECT * FROM email_verifications WHERE booking_id=?').get(initial.id);
+    const token=await cryptToken(verification.token_cipher,env.TOKEN_ENCRYPTION_KEY,true);
+    const verifiedResponse=await handle(request('/api/email/verify',{token}),env);
+    assert.equal(verifiedResponse.status,200);
+    const {checkoutToken}=await verifiedResponse.json();
+    const checkoutRequest=request('/api/checkout',{});checkoutRequest.headers.set('Authorization','Bearer '+checkoutToken);
+    assert.equal((await handle(checkoutRequest,env)).status,200);
     const booking=db.prepare('SELECT * FROM bookings WHERE slot_id=?').get(body.slot);
     sessions.push(booking.checkout_id);
     const session=await stripe.checkout.sessions.retrieve(booking.checkout_id);
@@ -68,8 +76,9 @@ try {
     assert.equal((await stripe.checkout.sessions.retrieve(session.id)).status,'expired');
     checks.push({package:pkg,depositCents:session.amount_total,sessionId:session.id,duplicateBookingRejected:true,unpaidRemainsHeld:true,expiredAtStripe:true});
   }
+  assert.equal((await handle(request('/api/bookings',{package:'signature',slot:'sandbox-1',name:'Sandbox Verification',email:'sandbox@example.com',acceptedTerms:true,termsVersion:env.TERMS_VERSION}),env)).status,409);
   await mkdir('test-results',{recursive:true});
-  await writeFile('test-results/stripe-sandbox-api.json',JSON.stringify({at:new Date().toISOString(),account:account.id,checks,limits:['Isolated local SQLite, not the deployed D1 database','No card submitted, signed Stripe delivery, email delivery, or mobile Checkout tested','Production remains closed']},null,2));
+  await writeFile('test-results/stripe-sandbox-api.json',JSON.stringify({at:new Date().toISOString(),account:account.id,checks,limits:['Isolated local SQLite, not the deployed D1 database','Email verification token consumed directly from isolated fixture storage: no real email ownership/delivery demonstrated','Signature blocked pending deposit allocation approval','No card submitted, signed Stripe delivery, email delivery, or mobile Checkout tested','Production remains closed']},null,2));
   console.log(JSON.stringify({accountVerified:true,cardOnlyVerified:true,packages:checks.map(({sessionId,...check})=>check),productionEnabled:false}));
 } finally {
   for(const id of sessions)try{const session=await stripe.checkout.sessions.retrieve(id);if(session.status==='open')await stripe.checkout.sessions.expire(id);}catch{console.error('Sandbox session cleanup needs owner review');}

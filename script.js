@@ -51,6 +51,7 @@ form.addEventListener('submit', async event => {
     const response = await fetch('/api/bookings', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...Object.fromEntries(new FormData(form)),acceptedTerms:document.getElementById('accept-terms').checked,termsVersion})});
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Unable to reserve this appointment.');
+    if(data.verificationRequired){status.textContent=data.message;return;}
     const checkout = new URL(data.url);
     if (checkout.protocol !== 'https:' || checkout.hostname !== 'checkout.stripe.com') throw new Error('Checkout unavailable.');
     window.location.assign(checkout.href);

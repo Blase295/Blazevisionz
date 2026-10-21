@@ -1,3 +1,5 @@
+> October 21 update: historical $150 Signature / $45 deposit / $105 balance entries below are superseded and unapproved. Current catalog total is $125; Signature Checkout is blocked until the owner approves the split. Historical test links must not be used. See [current sandbox implementation and verification](SANDBOX_READINESS.md).
+
 # Owner-review test Checkout pages
 
 Created October 9, 2026 in the separate Blaze Vizionz TEST account, acct_1UOWNwCXm8prgzws.

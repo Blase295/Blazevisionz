@@ -24,6 +24,7 @@
   "vars": {
     "ENVIRONMENT": "preview",
     "PAYMENTS_ENABLED": "false",
+    "SANDBOX_CHECKOUT_ENABLED": "false",
     "STRIPE_LIVE": "false",
     "TERMS_APPROVED": "false",
     "TAX_REVIEW_COMPLETE": "false",
@@ -62,6 +63,7 @@
       "vars": {
         "ENVIRONMENT": "production",
         "PAYMENTS_ENABLED": "false",
+    "SANDBOX_CHECKOUT_ENABLED": "false",
         "STRIPE_LIVE": "false",
         "TERMS_APPROVED": "false",
         "TAX_REVIEW_COMPLETE": "false",

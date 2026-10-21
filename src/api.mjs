@@ -11,8 +11,16 @@ async function body(request) {
   const text=await request.text();if(text.length>20000)fail('Request too large',413);
   try{return JSON.parse(text);}catch{fail('Invalid JSON');}
 }
-export function stripe(env) {return new Stripe(env.STRIPE_SECRET_KEY,{httpClient:Stripe.createFetchHttpClient(),maxNetworkRetries:2});}
-export async function readiness(env) {
+export function stripe(env) {
+  if(env.ENVIRONMENT==='preview' && env.STRIPE_LIVE!=='false')fail('Preview permits test mode only',503);
+  const mode=env.STRIPE_LIVE==='true'?'live':'test';
+  if(!new RegExp('^(sk|rk)_'+mode+'_').test(env.STRIPE_SECRET_KEY||''))fail('Stripe credential environment mismatch',503);
+  return new Stripe(env.STRIPE_SECRET_KEY,{httpClient:Stripe.createFetchHttpClient(),maxNetworkRetries:2});}
+export async function readiness(env, sandbox=false) {
+  if(sandbox) {
+    if(env.ENVIRONMENT!=='preview' || env.STRIPE_LIVE!=='false' || env.SANDBOX_CHECKOUT_ENABLED!=='true')return false;
+    env={...env,PAYMENTS_ENABLED:'true',TERMS_APPROVED:'true',TAX_REVIEW_COMPLETE:'true',LAUNCH_TESTS_PASSED:'true',TERMS_VERSION:'sandbox-fixture-v1'};
+  }
   if(env.PAYMENTS_ENABLED!=='true' || !env.DB || !env.BOOKING_LIMITER || !env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET || !env.STRIPE_PAYMENT_CONFIGURATION || !env.EXPECTED_STRIPE_ACCOUNT || !env.TOKEN_ENCRYPTION_KEY || !env.RESEND_API_KEY || !env.EMAIL_FROM || !env.CONTACT_EMAIL || !env.TERMS_VERSION || env.TERMS_APPROVED!=='true' || env.TAX_REVIEW_COMPLETE!=='true' || env.LAUNCH_TESTS_PASSED!=='true' || !env.SITE_URL) return false;
   if(env.ENVIRONMENT==='preview' && env.STRIPE_LIVE==='true') return false;
   if(env.ENVIRONMENT==='production' && env.STRIPE_LIVE!=='true')return false;
@@ -30,32 +38,60 @@ async function admin(request,env) {
 async function client(request,env) {
   const auth=request.headers.get('Authorization')||'';const token=auth.startsWith('Bearer ')?auth.slice(7):'';
   if(!/^[a-f0-9]{64}$/.test(token))fail('Private booking link required',401);
-  const booking=await query(env,"SELECT * FROM bookings WHERE token_hash=? AND deposit_paid=1 AND status IN ('confirmed','completed')",await digest(token)).first();
+  const booking=await query(env,"SELECT * FROM bookings WHERE token_hash=? AND deposit_paid=1 AND email_verified IS NOT NULL AND status IN ('confirmed','completed')",await digest(token)).first();
   if(!booking)fail('Verified paid booking required',403);return booking;
 }
 async function audit(env,actor,action,resource) {await query(env,'INSERT INTO audit VALUES(?,?,?,?,?)',crypto.randomUUID(),actor,action,resource,now()).run();}
 export async function enqueue(env,id,booking,kind,due=now()) {await query(env,'INSERT OR IGNORE INTO outbox(id,booking_id,kind,due) VALUES(?,?,?,?)',id,booking,kind,due).run();}
 function checkoutParams(env,booking,kind) {
   const p=PACKAGES[booking.package];
+  if(!Number.isInteger(p?.deposit) || !Number.isInteger(p?.balance))fail('Deposit allocation awaits owner approval',409);
   const suffix=booking.id.replaceAll('-','').slice(0,8).replace(/[0-9a-f]/g,c=>'abcdefghijklmnop'[parseInt(c,16)]);
   return {mode:'payment',payment_method_configuration:env.STRIPE_PAYMENT_CONFIGURATION,customer_email:booking.email,client_reference_id:booking.id,metadata:{booking_id:booking.id,kind},integration_identifier:'blazevisionz_'+suffix,excluded_payment_method_types:['afterpay_clearpay','klarna','affirm'],line_items:[{quantity:1,price_data:{currency:'usd',unit_amount:kind==='deposit'?p.deposit:p.balance,product_data:{name:`${p.name} — ${kind==='deposit'?'booking deposit':'remaining balance'}`}}}],expires_at:booking.expires,success_url:env.SITE_URL+'/?checkout=returned#booking',cancel_url:env.SITE_URL+'/?checkout=canceled#booking'};
 }
-async function createBooking(request,env) {
-  if(!await readiness(env))fail('Booking is not open yet',503);
+async function createBooking(request,env,sandbox=false) {
+  if(!await readiness(env,sandbox))fail('Booking is not open yet',503);
   const limited=await env.BOOKING_LIMITER.limit({key:request.headers.get('CF-Connecting-IP')||'unknown'});
   if(!limited.success)fail('Too many booking attempts. Please wait a minute.',429);
   const data=await body(request);
-  if(data.acceptedTerms!==true || data.termsVersion!==env.TERMS_VERSION)fail('Review and accept the current booking terms');
+  if(data.acceptedTerms!==true || data.termsVersion!==(sandbox?'sandbox-fixture-v1':env.TERMS_VERSION))fail('Review and accept the current booking terms');
   if(!PACKAGES[data.package] || typeof data.name!=='string' || !data.name.trim() || data.name.length>100 || typeof data.email!=='string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email) || data.email.length>254 || typeof data.slot!=='string') fail('Choose a package, appointment, name, and valid email');
+  if(!Number.isInteger(PACKAGES[data.package].deposit))fail('Signature deposit allocation awaits owner approval',409);
   const token=Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');
   const booking={id:crypto.randomUUID(),slot_id:data.slot,package:data.package,name:data.name.trim(),email:data.email.trim().toLowerCase(),created:now(),expires:now()+1860};
-  try {await query(env,"INSERT INTO bookings(id,slot_id,package,name,email,status,created,expires,token_hash,token_cipher) VALUES(?,?,?,?,?,'held',?,?,?,?)",booking.id,booking.slot_id,booking.package,booking.name,booking.email,booking.created,booking.expires,await digest(token),await cryptToken(token,env.TOKEN_ENCRYPTION_KEY)).run();}catch{fail('This appointment is unavailable or the weekly limit is reached',409);}
-  await query(env,'UPDATE bookings SET terms_version=?,terms_accepted=? WHERE id=?',env.TERMS_VERSION,now(),booking.id).run();
-  // A timeout can still create a Stripe session; retain this reservation until reconciled.
-  const session=await stripe(env).checkout.sessions.create(checkoutParams(env,booking,'deposit'),{idempotencyKey:'deposit-'+booking.id});
-  await query(env,'UPDATE bookings SET checkout_id=? WHERE id=?',session.id,booking.id).run();
-  return json({url:session.url},201);
+  const verification=crypto.randomUUID()+crypto.randomUUID();
+  const verificationHash=await digest(verification);
+  try {await env.DB.batch([
+    query(env,"INSERT INTO bookings(id,slot_id,package,name,email,status,created,expires,token_hash,token_cipher,terms_version,terms_accepted,sandbox) VALUES(?,?,?,?,?,'held',?,?,?,?,?,?,?)",booking.id,booking.slot_id,booking.package,booking.name,booking.email,booking.created,booking.expires,await digest(token),await cryptToken(token,env.TOKEN_ENCRYPTION_KEY),sandbox?'sandbox-fixture-v1':env.TERMS_VERSION,now(),sandbox?1:0),
+    query(env,'INSERT INTO email_verifications(booking_id,token_hash,token_cipher,expires) VALUES(?,?,?,?)',booking.id,verificationHash,await cryptToken(verification,env.TOKEN_ENCRYPTION_KEY),now()+900),
+    query(env,'INSERT INTO outbox(id,booking_id,kind,due) VALUES(?,?,?,?)',booking.id+'-verify',booking.id,'email_verification',now())
+  ]);}catch{fail('This appointment is unavailable or the weekly limit is reached',409);}
+  return json({verificationRequired:true,message:'Check your email to verify your address before checkout. The appointment is held temporarily.'},202);
 }
+async function verifyEmail(request,env) {
+  const data=await body(request);
+  if(typeof data.token!=='string' || !/^[a-f0-9-]{72}$/.test(data.token))fail('Invalid or expired verification link',403);
+  // UPDATE RETURNING consumes the token exactly once, even under concurrent requests.
+  const verification=await query(env,'UPDATE email_verifications SET consumed=? WHERE token_hash=? AND consumed IS NULL AND expires>? RETURNING booking_id',now(),await digest(data.token),now()).first();
+  if(!verification)fail('Invalid or expired verification link',403);
+  const booking=await query(env,'SELECT * FROM bookings WHERE id=?',verification.booking_id).first();
+  if(!booking)fail('Reservation expired; start a new booking',409);
+  return json({checkoutToken:await cryptToken(booking.token_cipher,env.TOKEN_ENCRYPTION_KEY,true)});
+}
+async function pendingCheckout(request,env) {
+  const auth=request.headers.get('Authorization')||'';
+  const token=auth.startsWith('Bearer ')?auth.slice(7):'';
+  if(!/^[a-f0-9]{64}$/.test(token))fail('Verified email required',401);
+  const booking=await query(env,"SELECT * FROM bookings WHERE token_hash=? AND email_verified IS NOT NULL AND status='held' AND expires>?",await digest(token),now()).first();
+  if(!booking)fail('Verified active reservation required',403);
+  if(!await readiness(env,!!booking.sandbox))fail('Checkout unavailable',503);
+  // Stable booking/expiry + idempotency key make a timeout safe to retry.
+  const session=booking.checkout_id?await stripe(env).checkout.sessions.retrieve(booking.checkout_id):await stripe(env).checkout.sessions.create(checkoutParams(env,booking,'deposit'),{idempotencyKey:'deposit-'+booking.id});
+  if(session.livemode!==(env.STRIPE_LIVE==='true'))fail('Wrong payment environment',409);
+  await query(env,'UPDATE bookings SET checkout_id=? WHERE id=? AND checkout_id IS NULL',session.id,booking.id).run();
+  return json({url:session.url});
+}
+
 async function createInquiry(request,env) {
   const data=await body(request);
   const types={'fashion-editorial':'Fashion + Editorial','local-business':'Local Business',event:'Event'};
@@ -78,18 +114,19 @@ export async function processPaid(env,session,eventId) {
   const id=session.metadata?.booking_id;const kind=session.metadata?.kind;
   if(!id || !['deposit','balance'].includes(kind))return;
   const booking=await query(env,'SELECT * FROM bookings WHERE id=?',id).first();if(!booking)return;
-  if(!paidSessionMatches(session,booking,kind,env.STRIPE_LIVE==='true'))fail('Payment verification mismatch',409);
+  if(!booking.email_verified || !paidSessionMatches(session,booking,kind,env.STRIPE_LIVE==='true'))fail('Payment verification mismatch',409);
   const statements=[query(env,'INSERT OR IGNORE INTO payment_events VALUES(?,?,?,?)',eventId,id,kind,now())];
   if(kind==='deposit') {
-    if(!['held','confirmed'].includes(booking.status)) {await enqueue(env,'review-'+eventId,id,'payment_review');return;}
+    if(!['held','confirmed'].includes(booking.status)) {await env.DB.batch([...statements,query(env,'INSERT OR IGNORE INTO outbox(id,booking_id,kind,due) VALUES(?,?,?,?)','review-'+session.id,id,'payment_review',now())]);return;}
     statements.push(query(env,"UPDATE bookings SET deposit_paid=1,status='confirmed' WHERE id=? AND status='held'",id));
     const slot=await query(env,'SELECT * FROM slots WHERE id=?',booking.slot_id).first();
-    for(const [key,type,due] of [['confirmed','confirmation',now()],['brief','owner_confirmation',now()],['reminder','shoot_reminder',Math.max(now(),slot.start-86400)]]) statements.push(query(env,'INSERT OR IGNORE INTO outbox(id,booking_id,kind,due) VALUES(?,?,?,?)',id+'-'+key,id,type,due));
+    for(const [key,type,due] of [['confirmed','confirmation',now()],['brief','owner_confirmation',now()],['reminder','shoot_reminder',Math.max(now(),slot.start-86400)]]) statements.push(query(env,"INSERT OR IGNORE INTO outbox(id,booking_id,kind,due) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM bookings WHERE id=? AND status='confirmed' AND deposit_paid=1 AND email_verified IS NOT NULL)",id+'-'+key,id,type,due,id));
   } else {
     if(!['confirmed','completed'].includes(booking.status))fail('Booking is not active',409);
-    statements.push(query(env,'UPDATE bookings SET balance_paid=1 WHERE id=?',id));
-    statements.push(query(env,'INSERT OR IGNORE INTO outbox(id,booking_id,kind,due) VALUES(?,?,?,?)',id+'-balance',id,'balance_receipt',now()));
+    statements.push(query(env,'UPDATE bookings SET balance_paid=1 WHERE id=? AND status IN ("confirmed","completed")',id));
+    statements.push(query(env,"INSERT OR IGNORE INTO outbox(id,booking_id,kind,due) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM bookings WHERE id=? AND status IN ('confirmed','completed') AND balance_paid=1)",id+'-balance',id,'balance_receipt',now(),id));
   }
+  statements.push(query(env,"INSERT OR IGNORE INTO outbox(id,booking_id,kind,due) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM bookings WHERE id=? AND status NOT IN ('held','confirmed','completed'))",'review-'+session.id,id,'payment_review',now(),id));
   await env.DB.batch(statements);
 }
 async function webhook(request,env) {
@@ -102,6 +139,11 @@ async function webhook(request,env) {
   if(['checkout.session.completed','checkout.session.async_payment_succeeded'].includes(event.type)) {
     const session=await stripe(env).checkout.sessions.retrieve(event.data.object.id);
     if(session.payment_status==='paid')await processPaid(env,session,event.id);
+  } else if(event.type==='checkout.session.async_payment_failed') {
+    const session=await stripe(env).checkout.sessions.retrieve(event.data.object.id);
+    const booking=await query(env,'SELECT * FROM bookings WHERE checkout_id=?',session.id).first();
+    if(booking && session.payment_status!=='paid')await enqueue(env,booking.id+'-payment-failed',booking.id,'payment_review');
+    // A failure never releases a hold until Stripe reports expiry.
   } else if(event.type==='checkout.session.expired') {
     const session=await stripe(env).checkout.sessions.retrieve(event.data.object.id);
     if(session.status==='expired' && session.payment_status!=='paid')await query(env,"UPDATE bookings SET status='expired' WHERE checkout_id=? AND status='held'",session.id).run();
@@ -114,7 +156,7 @@ async function clientRoute(request,env,path) {
     const slot=await query(env,'SELECT start FROM slots WHERE id=?',booking.slot_id).first();
     const consult=await query(env,'SELECT s.start FROM consultations c JOIN slots s ON s.id=c.slot_id WHERE c.booking_id=?',booking.id).first();
     const slots=booking.intake&&!consult?(await query(env,"SELECT id,start FROM slots WHERE kind='consult' AND open=1 AND start>? AND start<? AND NOT EXISTS(SELECT 1 FROM consultations WHERE slot_id=slots.id) ORDER BY start",now(),slot.start).all()).results:[];
-    return json({voiceRemindersAvailable:voiceReady(env),package:p.name,start:slot.start,name:booking.name,email:booking.email,consent:!!booking.consent,intake:booking.intake?JSON.parse(booking.intake):null,consult,slots,balance:p.balance/100,balancePaid:!!booking.balance_paid,proofUrl:booking.proof_url,deliveryUrl:booking.balance_paid?booking.delivery_url:null});
+    return json({voiceRemindersAvailable:voiceReady(env),package:p.name,start:slot.start,name:booking.name,email:booking.email,consent:!!booking.consent,intake:booking.intake?JSON.parse(booking.intake):null,consult,slots,paymentsEnabled:Number.isInteger(p.balance) && await readiness(env,!!booking.sandbox),balance:p.balance===null?null:p.balance/100,balancePaid:!!booking.balance_paid,proofUrl:booking.proof_url,deliveryUrl:booking.balance_paid?booking.delivery_url:null});
   }
   const data=await body(request);
   if(path.endsWith('/intake')) {
@@ -131,7 +173,7 @@ async function clientRoute(request,env,path) {
     if(!slot || slot.start>=shoot.start)fail('Choose a phone call before your shoot');
     try{await env.DB.batch([query(env,'INSERT INTO consultations VALUES(?,?)',booking.id,data.slot),query(env,'INSERT OR IGNORE INTO outbox(id,booking_id,kind,due) VALUES(?,?,?,?)',booking.id+'-consult',booking.id,'consult_confirmation',now()),query(env,'INSERT OR IGNORE INTO outbox(id,booking_id,kind,due) VALUES(?,?,?,?)',booking.id+'-consult-reminder',booking.id,'consult_reminder',Math.max(now(),slot.start-3600))]);}catch{fail('Consultation unavailable; paid booking and intake are required',409);}
   } else if(path.endsWith('/balance')) {
-    if(!await readiness(env))fail('Payments unavailable',503);if(booking.balance_paid)fail('Balance already paid',409);
+    if(!Number.isInteger(p.balance) || !await readiness(env,!!booking.sandbox))fail('Payments unavailable',503);if(booking.balance_paid)fail('Balance already paid',409);
     let session;
     if(booking.balance_checkout_id){session=await stripe(env).checkout.sessions.retrieve(booking.balance_checkout_id);if(session.status==='complete')fail('Payment is processing; wait for verification',409);}
     if(!session || session.status==='expired') {
@@ -207,7 +249,7 @@ export async function handle(request,env) {
   try {
     if(path==='/api/availability' && request.method==='GET') {
       const packageId=new URL(request.url).searchParams.get('package')||'essential';if(!PACKAGES[packageId])fail('Invalid package');
-      const ready=await readiness(env);
+      const ready=Number.isInteger(PACKAGES[packageId].deposit) && await readiness(env);
       if(!env.DB)return json({paymentsEnabled:false,slots:[]});
       const slots=(await query(env,"SELECT s.id,s.start FROM slots s JOIN weeks w ON w.week=s.week WHERE s.kind='shoot' AND s.open=1 AND s.start>? AND s.end-s.start>=? AND NOT EXISTS(SELECT 1 FROM bookings WHERE slot_id=s.id AND status IN ('held','confirmed','completed','payment_review')) AND (SELECT COUNT(*) FROM bookings b JOIN slots bs ON bs.id=b.slot_id WHERE bs.week=s.week AND b.status IN ('held','confirmed','completed','payment_review'))<w.booking_limit ORDER BY s.start LIMIT 100",now(),PACKAGES[packageId].minutes*60).all()).results;
       return json({paymentsEnabled:ready,slots:ready?slots:[],...(ready?{termsVersion:env.TERMS_VERSION}:{})});
@@ -217,6 +259,9 @@ export async function handle(request,env) {
     if(!['GET','POST'].includes(request.method))fail('Method not allowed',405);
     if(request.method==='POST' && request.headers.get('Origin')!==new URL(request.url).origin)fail('Same-origin request required',403);
     if(path==='/api/inquiries' && request.method==='POST')return await createInquiry(request,env);
+    if(path==='/api/email/verify' && request.method==='POST')return await verifyEmail(request,env);
+    if(path==='/api/checkout' && request.method==='POST')return await pendingCheckout(request,env);
+    if(path==='/api/sandbox/bookings' && request.method==='POST'){await admin(request,env);return await createBooking(request,env,true);}
     if(path==='/api/bookings' && request.method==='POST')return await createBooking(request,env);
     if(path==='/api/admin' || path.startsWith('/api/admin/'))return await adminRoute(request,env,path);
     if(path==='/api/client' || path.startsWith('/api/client/'))return await clientRoute(request,env,path);
