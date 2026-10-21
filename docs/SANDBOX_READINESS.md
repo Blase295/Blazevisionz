@@ -1,3 +1,5 @@
+> Updated owner decisions and follow-up tests: see [launch follow-up](LAUNCH_FOLLOWUP.md). The old deposit splits and pending-Signature statements below describe the earlier test run, not current pricing.
+
 # Blazevisionz sandbox implementation — October 21, 2026
 
 This change extends the existing repository and preview Worker. Public checkout remains disabled. No production deployment, live payment, or Grailed change was performed. The owner explicitly authorized disposable scheduling fixtures in the existing preview database. Real verification and test confirmation emails were sent only to the approved owner test recipient; real commitments and production scheduling were not changed.

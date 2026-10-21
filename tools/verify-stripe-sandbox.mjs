@@ -46,7 +46,7 @@ try {
   const availability=await (await handle(request('/api/availability'),env)).json();
   assert.equal(availability.paymentsEnabled,true);
   assert.equal(availability.slots.length,2);
-  for(const [i,pkg] of ['essential'].entries()) {
+  for(const [i,pkg] of ['essential','signature'].entries()) {
     const body={package:pkg,slot:'sandbox-'+i,name:'Sandbox Verification',email:'sandbox@example.com',acceptedTerms:true,termsVersion:env.TERMS_VERSION};
     const response=await handle(request('/api/bookings',body),env);
     assert.equal(response.status,202,'Email verification hold creation failed');
@@ -76,9 +76,8 @@ try {
     assert.equal((await stripe.checkout.sessions.retrieve(session.id)).status,'expired');
     checks.push({package:pkg,depositCents:session.amount_total,sessionId:session.id,duplicateBookingRejected:true,unpaidRemainsHeld:true,expiredAtStripe:true});
   }
-  assert.equal((await handle(request('/api/bookings',{package:'signature',slot:'sandbox-1',name:'Sandbox Verification',email:'sandbox@example.com',acceptedTerms:true,termsVersion:env.TERMS_VERSION}),env)).status,409);
   await mkdir('test-results',{recursive:true});
-  await writeFile('test-results/stripe-sandbox-api.json',JSON.stringify({at:new Date().toISOString(),account:account.id,checks,limits:['Isolated local SQLite, not the deployed D1 database','Email verification token consumed directly from isolated fixture storage: no real email ownership/delivery demonstrated','Signature blocked pending deposit allocation approval','No card submitted, signed Stripe delivery, email delivery, or mobile Checkout tested','Production remains closed']},null,2));
+  await writeFile('test-results/stripe-sandbox-api.json',JSON.stringify({at:new Date().toISOString(),account:account.id,checks,limits:['Isolated local SQLite, not the deployed D1 database','Email verification token consumed directly from isolated fixture storage: no real email ownership/delivery demonstrated','No card submitted, signed Stripe delivery, email delivery, or mobile Checkout tested','Production remains closed']},null,2));
   console.log(JSON.stringify({accountVerified:true,cardOnlyVerified:true,packages:checks.map(({sessionId,...check})=>check),productionEnabled:false}));
 } finally {
   for(const id of sessions)try{const session=await stripe.checkout.sessions.retrieve(id);if(session.status==='open')await stripe.checkout.sessions.expire(id);}catch{console.error('Sandbox session cleanup needs owner review');}

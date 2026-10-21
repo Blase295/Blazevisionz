@@ -1,12 +1,18 @@
+// Owner-approved rule applies to the agreed service total before separately added tax.
+export function depositForTotal(total) {
+  if(!Number.isSafeInteger(total) || total<=0)throw new Error('A positive total in cents is required');
+  return total>50000?20000:total>=20000?10000:Math.ceil(total/2);
+}
+function priced(total) {const deposit=depositForTotal(total);return {total,deposit,balance:total-deposit};}
 export const PACKAGES = Object.freeze({
-  essential: Object.freeze({name:'Essential Session', total:10000, deposit:3000, balance:7000, minutes:30, images:3}),
-  signature: Object.freeze({name:'Signature Session', total:12500, deposit:null, balance:null, minutes:60, images:5})
+  essential: Object.freeze({name:'Essential Session', ...priced(10000), minutes:30, images:3}),
+  signature: Object.freeze({name:'Signature Session', ...priced(12500), minutes:60, images:5})
 });
 // These catalog entries require distinct, approved sales flows before payment.
 export const CATALOG = Object.freeze({...PACKAGES,
   monthly: Object.freeze({name:'Monthly Edit',total:12500,interval:'month',minutes:60,images:7,usableRAWs:true}),
   personalRAW: Object.freeze({name:'Personal full RAW add-on',total:5000}),
-  campaign: Object.freeze({name:'Campaign Production',total:45000,minutes:120,locations:2,consultationRequired:true})
+  campaign: Object.freeze({name:'Campaign Production',...priced(45000),minutes:120,locations:2,consultationRequired:true})
 });
 export function localParts(epoch) {
   return Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit',weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(epoch*1000)).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));

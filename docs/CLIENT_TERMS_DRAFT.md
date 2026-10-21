@@ -1,3 +1,5 @@
+> Historical draft superseded by [current owner policy review](LAUNCH_POLICY_REVIEW.md). Do not publish the old prices, splits, or delivery targets below.
+
 # Proposed client terms — private draft, not approved for publication
 
 Owner and qualified legal review required before setting TERMS_APPROVED. This is a working draft, not legal advice or a published contract. Resolve the open decisions below and update the website, checkout acceptance, confirmation emails, and TERMS_VERSION together.

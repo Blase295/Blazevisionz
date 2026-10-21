@@ -47,7 +47,7 @@ function checkoutParams(env,booking,kind) {
   const p=PACKAGES[booking.package];
   if(!Number.isInteger(p?.deposit) || !Number.isInteger(p?.balance))fail('Deposit allocation awaits owner approval',409);
   const suffix=booking.id.replaceAll('-','').slice(0,8).replace(/[0-9a-f]/g,c=>'abcdefghijklmnop'[parseInt(c,16)]);
-  return {mode:'payment',payment_method_configuration:env.STRIPE_PAYMENT_CONFIGURATION,customer_email:booking.email,client_reference_id:booking.id,metadata:{booking_id:booking.id,kind},integration_identifier:'blazevisionz_'+suffix,excluded_payment_method_types:['afterpay_clearpay','klarna','affirm'],line_items:[{quantity:1,price_data:{currency:'usd',unit_amount:kind==='deposit'?p.deposit:p.balance,product_data:{name:`${p.name} — ${kind==='deposit'?'booking deposit':'remaining balance'}`}}}],expires_at:booking.expires,success_url:env.SITE_URL+'/?checkout=returned#booking',cancel_url:env.SITE_URL+'/?checkout=canceled#booking'};
+  return {mode:'payment',payment_method_configuration:env.STRIPE_PAYMENT_CONFIGURATION,customer_email:booking.email,client_reference_id:booking.id,metadata:{booking_id:booking.id,kind},integration_identifier:'blazevisionz_'+suffix,excluded_payment_method_types:['afterpay_clearpay','klarna','affirm'],line_items:[{quantity:1,price_data:{currency:'usd',tax_behavior:'exclusive',unit_amount:kind==='deposit'?p.deposit:p.balance,product_data:{name:`${p.name} — ${kind==='deposit'?'booking deposit':'remaining balance'}`}}}],expires_at:booking.expires,success_url:env.SITE_URL+'/?checkout=returned#booking',cancel_url:env.SITE_URL+'/?checkout=canceled#booking'};
 }
 async function createBooking(request,env,sandbox=false) {
   if(!await readiness(env,sandbox))fail('Booking is not open yet',503);
@@ -56,7 +56,7 @@ async function createBooking(request,env,sandbox=false) {
   const data=await body(request);
   if(data.acceptedTerms!==true || data.termsVersion!==(sandbox?'sandbox-fixture-v1':env.TERMS_VERSION))fail('Review and accept the current booking terms');
   if(!PACKAGES[data.package] || typeof data.name!=='string' || !data.name.trim() || data.name.length>100 || typeof data.email!=='string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email) || data.email.length>254 || typeof data.slot!=='string') fail('Choose a package, appointment, name, and valid email');
-  if(!Number.isInteger(PACKAGES[data.package].deposit))fail('Signature deposit allocation awaits owner approval',409);
+  if(!Number.isInteger(PACKAGES[data.package].deposit))fail('Booking deposit is not configured',409);
   const token=Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');
   const booking={id:crypto.randomUUID(),slot_id:data.slot,package:data.package,name:data.name.trim(),email:data.email.trim().toLowerCase(),created:now(),expires:now()+1860};
   const verification=crypto.randomUUID()+crypto.randomUUID();
