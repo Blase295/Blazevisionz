@@ -142,6 +142,9 @@ async function webhook(request,env) {
   if(event.livemode!==(env.STRIPE_LIVE==='true') || event.account && event.account!==env.EXPECTED_STRIPE_ACCOUNT)fail('Wrong account or payment environment',400);
   const account=await stripe(env).accounts.retrieve();if(account.id!==env.EXPECTED_STRIPE_ACCOUNT)fail('Wrong Stripe account',409);
   if(await query(env,'SELECT id FROM payment_events WHERE id=?',event.id).first())return json({received:true});
+  // The destination also receives unrelated account checkouts and Stripe test fixtures.
+  // A signed event without our booking metadata never authorizes fulfillment.
+  if(!event.data?.object?.metadata?.booking_id)return json({received:true,ignored:true});
   if(['checkout.session.completed','checkout.session.async_payment_succeeded'].includes(event.type)) {
     const session=await stripe(env).checkout.sessions.retrieve(event.data.object.id);
     if(session.payment_status==='paid')await processPaid(env,session,event.id);

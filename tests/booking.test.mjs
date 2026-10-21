@@ -36,7 +36,7 @@ test('genuine signed webhook verifies server state and rejects duplicate confirm
  const original=globalThis.fetch;
  globalThis.fetch=async input=>{const url=new URL(typeof input==='string'?input:input.url||String(input));if(url.pathname==='/v1/account')return Response.json({id:'acct_blaze_test'});if(url.pathname==='/v1/checkout/sessions/cs_a')return Response.json(session('a'));throw new Error('Unexpected external call');};
  try{
- const payload=JSON.stringify({id:'evt_signed',type:'checkout.session.completed',livemode:false,data:{object:{id:'cs_a'}}});const t=Math.floor(Date.now()/1000);const signature=createHmac('sha256','whsec_local_fixture').update(t+'.'+payload).digest('hex');const env={DB:adapter(db),STRIPE_LIVE:'false',EXPECTED_STRIPE_ACCOUNT:'acct_blaze_test',STRIPE_SECRET_KEY:'sk_test_local_fixture',STRIPE_WEBHOOK_SECRET:'whsec_local_fixture'};
+ const payload=JSON.stringify({id:'evt_signed',type:'checkout.session.completed',livemode:false,data:{object:{id:'cs_a',metadata:{booking_id:'a',kind:'deposit'}}}});const t=Math.floor(Date.now()/1000);const signature=createHmac('sha256','whsec_local_fixture').update(t+'.'+payload).digest('hex');const env={DB:adapter(db),STRIPE_LIVE:'false',EXPECTED_STRIPE_ACCOUNT:'acct_blaze_test',STRIPE_SECRET_KEY:'sk_test_local_fixture',STRIPE_WEBHOOK_SECRET:'whsec_local_fixture'};
  for(let i=0;i<2;i++){const response=await handle(new Request('https://example.com/api/webhook',{method:'POST',headers:{'Stripe-Signature':`t=${t},v1=${signature}`},body:payload}),env);assert.equal(response.status,200);}
  assert.equal(db.prepare('SELECT status FROM bookings').get().status,'confirmed');assert.equal(db.prepare('SELECT COUNT(*) n FROM outbox').get().n,3);
  }finally{globalThis.fetch=original;}
@@ -126,7 +126,7 @@ test('customer authorization binds reads and writes to one record, ignoring supp
 test('signed webhook rejects tampering, stale timestamps, and wrong account/environment',async()=>{
  const db=database();const env={DB:adapter(db),STRIPE_LIVE:'false',EXPECTED_STRIPE_ACCOUNT:'acct_blaze_test',STRIPE_SECRET_KEY:'sk_test_local_fixture',STRIPE_WEBHOOK_SECRET:'whsec_local_fixture'};
  const t=Math.floor(Date.now()/1000);const send=async(data,timestamp=t,tamper=false)=>{const raw=JSON.stringify(data);const sig=createHmac('sha256',env.STRIPE_WEBHOOK_SECRET).update(timestamp+'.'+raw).digest('hex');return handle(new Request('https://example.com/api/webhook',{method:'POST',headers:{'Stripe-Signature':`t=${timestamp},v1=${sig}`},body:raw+(tamper?' ':'' )}),env);};
- const event={id:'evt_fixture',type:'checkout.session.completed',livemode:false,data:{object:{id:'cs_a'}}};assert.equal((await send(event,t,true)).status,400);assert.equal((await send(event,t-600)).status,400);assert.equal((await send({...event,livemode:true})).status,400);assert.equal((await send({...event,account:'acct_wrong'})).status,400);
+ const event={id:'evt_fixture',type:'checkout.session.completed',livemode:false,data:{object:{id:'cs_a',metadata:{booking_id:'a',kind:'deposit'}}}};assert.equal((await send(event,t,true)).status,400);assert.equal((await send(event,t-600)).status,400);assert.equal((await send({...event,livemode:true})).status,400);assert.equal((await send({...event,account:'acct_wrong'})).status,400);
 });
 
 test('concurrent email dispatch leases one send and records provider acceptance',async()=>{
@@ -151,4 +151,11 @@ test('late paid session queues owner review even after cancellation',async()=>{
 test('verified balance payment is atomic and duplicate events queue one receipt',async()=>{
  const db=database();seed(db);slot(db,'s');book(db,'a','s');const env={DB:adapter(db),STRIPE_LIVE:'false'};await processPaid(env,session('a'),'evt_deposit');db.exec("UPDATE bookings SET balance_checkout_id='cs_balance' WHERE id='a'");
  const paid={...session('a'),id:'cs_balance',amount_total:7000,metadata:{booking_id:'a',kind:'balance'}};await processPaid(env,paid,'evt_balance');await processPaid(env,paid,'evt_balance');await processPaid(env,paid,'evt_balance_other');assert.equal(db.prepare('SELECT balance_paid FROM bookings').get().balance_paid,1);assert.equal(db.prepare("SELECT COUNT(*) n FROM outbox WHERE kind='balance_receipt'").get().n,1);
+});
+
+test('signed non-booking webhook fixtures are acknowledged without granting fulfillment',async()=>{
+ const db=database();const env=testEnv(db);await stripeFixture(async calls=>{
+  const raw=JSON.stringify({id:'evt_non_booking',type:'checkout.session.completed',livemode:false,data:{object:{id:'cs_fixture_without_booking',metadata:{}}}});const t=Math.floor(Date.now()/1000);const sig=createHmac('sha256',env.STRIPE_WEBHOOK_SECRET).update(t+'.'+raw).digest('hex');
+  const response=await handle(new Request('https://example.com/api/webhook',{method:'POST',headers:{'Stripe-Signature':`t=${t},v1=${sig}`},body:raw}),env);assert.equal(response.status,200);assert.deepEqual(await response.json(),{received:true,ignored:true});assert.equal(calls.filter(c=>c.url.includes('checkout')).length,0);assert.equal(db.prepare('SELECT COUNT(*) n FROM bookings').get().n,0);assert.equal(db.prepare('SELECT COUNT(*) n FROM outbox').get().n,0);
+ });
 });
