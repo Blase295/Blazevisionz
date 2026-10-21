@@ -47,6 +47,11 @@ test('email outbox sends the verified client link once and retains failed delive
  const env={DB:adapter(db),RESEND_API_KEY:'local-email-fixture',TOKEN_ENCRYPTION_KEY:'local-encryption-fixture',SITE_URL:'https://example.com',EMAIL_FROM:'studio@example.com',CONTACT_EMAIL:'studio@example.com',ADMIN_EMAIL:'owner@example.com'};
  try{await maintenance(env);await maintenance(env);assert.equal(sent.length,1);assert.deepEqual(sent[0].to,['client@example.com']);assert.ok(sent[0].text.includes('/client.html#'+'a'.repeat(64)));assert.ok(sent[0].text.includes('$30'));db.exec("INSERT INTO outbox(id,booking_id,kind,due) VALUES('message-2','a','shoot_reminder',0)");globalThis.fetch=async()=>new Response('rejected',{status:503});await maintenance(env);const pending=db.prepare("SELECT sent,attempts FROM outbox WHERE id='message-2'").get();assert.equal(pending.sent,null);assert.equal(pending.attempts,1);}finally{globalThis.fetch=original;}
 });
+test('sandbox confirmations clearly disclose no live payment or commitment',async()=>{
+ const db=database();seed(db);slot(db,'s');book(db,'a','s');const env={...testEnv(db),STRIPE_SECRET_KEY:undefined};
+ db.prepare("UPDATE bookings SET sandbox=1,deposit_paid=1,status='confirmed',token_cipher=? WHERE id='a'").run(await cryptToken('a'.repeat(64),env.TOKEN_ENCRYPTION_KEY));db.exec("INSERT INTO outbox(id,booking_id,kind,due) VALUES('test-confirmation','a','confirmation',0)");
+ await stripeFixture(async calls=>{await maintenance(env);const message=JSON.parse(calls.find(c=>c.url==='/emails').options.body);assert.ok(message.subject.startsWith('[TEST ONLY]'));assert.ok(message.text.startsWith('TEST ONLY — no live payment or photography commitment.'));});
+});
 test('calendar closure cannot race an occupied reservation',()=>{const db=database();seed(db);slot(db,'s');book(db,'a','s');assert.throws(()=>db.exec("UPDATE slots SET open=0 WHERE id='s'"));assert.equal(db.prepare('SELECT open FROM slots').get().open,1);});
 
 function testEnv(db){return {DB:adapter(db),ENVIRONMENT:'preview',STRIPE_LIVE:'false',PAYMENTS_ENABLED:'true',STRIPE_SECRET_KEY:'sk_test_local_fixture',STRIPE_WEBHOOK_SECRET:'whsec_local_fixture',EXPECTED_STRIPE_ACCOUNT:'acct_blaze_test',STRIPE_PAYMENT_CONFIGURATION:'pmc_local_fixture',BOOKING_LIMITER:{async limit(){return {success:true};}},TOKEN_ENCRYPTION_KEY:'local-encryption-fixture',RESEND_API_KEY:'local-email-fixture',EMAIL_FROM:'studio@example.com',CONTACT_EMAIL:'studio@example.com',ADMIN_EMAIL:'owner@example.com',SITE_URL:'https://example.com',TERMS_VERSION:'local-test-only',TERMS_APPROVED:'true',TAX_REVIEW_COMPLETE:'true',LAUNCH_TESTS_PASSED:'true'};}
@@ -97,6 +102,7 @@ test('Signature and consultation-first catalogs cannot create a payable personal
 test('sandbox booking path requires owner Access and never opens public availability',async()=>{
  const db=database();const env={...testEnv(db),PAYMENTS_ENABLED:'false',SANDBOX_CHECKOUT_ENABLED:'true',ACCESS_TEAM_DOMAIN:'example.cloudflareaccess.com',ACCESS_AUD:'owner-fixture'};
  assert.equal((await handle(post('/api/sandbox/bookings',payload()),env)).status,401);
+ assert.equal((await handle(post('/api/admin/sandbox/bookings',payload()),env)).status,401);
  assert.equal((await handle(post('/api/bookings',payload()),env)).status,503);
  assert.equal((await (await handle(new Request('https://example.com/api/availability'),env)).json()).paymentsEnabled,false);
  const {readiness}=await import('../src/api.mjs');await stripeFixture(async()=>{assert.equal(await readiness(env,true),true);assert.equal(await readiness({...env,ENVIRONMENT:'production'},true),false);assert.equal(await readiness({...env,STRIPE_SECRET_KEY:'sk_live_forbidden'},true),false);});

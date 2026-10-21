@@ -8,6 +8,13 @@ async function save(path,data){try{await api(path,data);status.textContent='Save
 async function load(){
  try{
  const data=await api();status.textContent='Owner access verified. Schedule uses America/Chicago.';
+ let sandbox=document.getElementById('sandbox-test');if(sandbox)sandbox.remove();
+ if(data.sandboxEnabled){
+  sandbox=node('section','');sandbox.id='sandbox-test';sandbox.append(node('h2','Preview test booking'),node('p','TEST ONLY. Essential $100 total / $30 test deposit. Uses disposable preview appointments and sends real verification email. No real payment or photography commitment.'));
+  const form=node('form','');const emailLabel=node('label','Test recipient email');const email=node('input','');email.name='email';email.type='email';email.required=true;emailLabel.append(email);
+  const slotLabel=node('label','Disposable preview appointment');const select=node('select','');select.name='slot';select.required=true;select.append(new Option('Choose test appointment',''));for(const slot of data.slots.filter(s=>s.open&&s.kind==='shoot'&&s.id.startsWith('sandbox-fixture-')))select.append(new Option('TEST ONLY — '+new Date(slot.start*1000).toLocaleString('en-US',{timeZone:'America/Chicago'}),slot.id));slotLabel.append(select);
+  const button=node('button','SEND TEST VERIFICATION');form.append(emailLabel,slotLabel,button);form.onsubmit=async e=>{e.preventDefault();button.disabled=true;try{const response=await fetch('/api/admin/sandbox/bookings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({package:'essential',name:'SANDBOX TEST ONLY',email:email.value,slot:select.value,termsVersion:'sandbox-fixture-v1',acceptedTerms:true})});const result=await response.json();if(!response.ok)throw new Error(result.error);await api('/dispatch',{});status.textContent=result.message;}catch(error){status.textContent=error.message;}finally{button.disabled=false;}};sandbox.append(form);document.querySelector('main').prepend(sandbox);
+ }
  const schedule=document.getElementById('schedule');schedule.replaceChildren();
  for(const week of data.weeks)schedule.append(node('p',`Week ${week.week}: maximum ${week.booking_limit} sessions.`));
  for(const block of data.blocks)schedule.append(node('p',`${block.kind.toUpperCase()}: ${new Date(block.start*1000).toLocaleString('en-US',{timeZone:'America/Chicago'})} — ${new Date(block.end*1000).toLocaleString('en-US',{timeZone:'America/Chicago'})}`));

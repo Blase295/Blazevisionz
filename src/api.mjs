@@ -204,7 +204,7 @@ async function clientRoute(request,env,path) {
 }
 async function adminRoute(request,env,path) {
   const actor=await admin(request,env);
-  if(request.method==='GET')return json({slots:(await query(env,'SELECT * FROM slots ORDER BY start').all()).results,blocks:(await query(env,'SELECT * FROM blocks ORDER BY start').all()).results,weeks:(await query(env,'SELECT * FROM weeks ORDER BY week').all()).results,bookings:(await query(env,'SELECT id,package,name,email,status,deposit_paid,balance_paid,intake,consent,consent_updated,selections,proof_url,delivery_url,slot_id FROM bookings ORDER BY created DESC').all()).results});
+  if(request.method==='GET')return json({sandboxEnabled:env.ENVIRONMENT==='preview' && env.STRIPE_LIVE==='false' && env.SANDBOX_CHECKOUT_ENABLED==='true',slots:(await query(env,'SELECT * FROM slots ORDER BY start').all()).results,blocks:(await query(env,'SELECT * FROM blocks ORDER BY start').all()).results,weeks:(await query(env,'SELECT * FROM weeks ORDER BY week').all()).results,bookings:(await query(env,'SELECT id,package,name,email,status,deposit_paid,balance_paid,intake,consent,consent_updated,selections,proof_url,delivery_url,slot_id FROM bookings ORDER BY created DESC').all()).results});
   const data=await body(request);const action=path.split('/').at(-1);let resource=crypto.randomUUID();
   if(action==='week') {
     if(!/^\d{4}-\d\d-\d\d$/.test(data.week)||new Date(data.week+'T12:00Z').getUTCDay()!==1 || !Number.isInteger(data.limit) || data.limit<1 || data.limit>6)fail('Choose a Monday and a limit from 1 to 6');
@@ -270,7 +270,8 @@ export async function handle(request,env) {
     if(path==='/api/inquiries' && request.method==='POST')return await createInquiry(request,env);
     if(path==='/api/email/verify' && request.method==='POST')return await verifyEmail(request,env);
     if(path==='/api/checkout' && request.method==='POST')return await pendingCheckout(request,env);
-    if(path==='/api/sandbox/bookings' && request.method==='POST'){await admin(request,env);return await createBooking(request,env,true);}
+    // Use the existing Access-protected admin path so Cloudflare injects its JWT.
+    if(['/api/admin/sandbox/bookings','/api/sandbox/bookings'].includes(path) && request.method==='POST'){await admin(request,env);return await createBooking(request,env,true);}
     if(path==='/api/bookings' && request.method==='POST')return await createBooking(request,env);
     if(path==='/api/admin' || path.startsWith('/api/admin/'))return await adminRoute(request,env,path);
     if(path==='/api/client' || path.startsWith('/api/client/'))return await clientRoute(request,env,path);

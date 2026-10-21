@@ -61,7 +61,8 @@ export async function maintenance(env) {
       text=`Blazevisionz${booking.sandbox?' TEST ONLY — no live payment':''}\n\nVerify your email address before Checkout: ${env.SITE_URL}/verify.html#${secret}\n\nThis one-time link expires 15 minutes after your request. Verification does not confirm payment or a booking. If you did not request this, ignore this message. Contact: ${env.CONTACT_EMAIL}`;
     }
     try {
-      const payload=JSON.stringify({from:env.EMAIL_FROM,to:[owner?env.ADMIN_EMAIL:booking.email],reply_to:env.CONTACT_EMAIL,subject:'Blazing Visuals — '+message.kind.replaceAll('_',' '),text});
+      if(booking.sandbox && message.kind!=='email_verification')text='TEST ONLY — no live payment or photography commitment.\n\n'+text;
+      const payload=JSON.stringify({from:env.EMAIL_FROM,to:[owner?env.ADMIN_EMAIL:booking.email],reply_to:env.CONTACT_EMAIL,subject:(booking.sandbox?'[TEST ONLY] ':'')+'Blazing Visuals — '+message.kind.replaceAll('_',' '),text});
       // Retried requests must preserve both idempotency key and exact message content.
       // Encrypt the snapshot because it may contain a private portal/verification link.
       const snapshot=await query(env,'UPDATE outbox SET payload_cipher=COALESCE(payload_cipher,?) WHERE id=? AND lease_id=? RETURNING payload_cipher',await cryptToken(payload,env.TOKEN_ENCRYPTION_KEY),message.id,lease).first();
