@@ -123,7 +123,7 @@ export async function processPaid(env,session,eventId) {
     for(const [key,type,due] of [['confirmed','confirmation',now()],['brief','owner_confirmation',now()],['reminder','shoot_reminder',Math.max(now(),slot.start-86400)]]) statements.push(query(env,"INSERT OR IGNORE INTO outbox(id,booking_id,kind,due) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM bookings WHERE id=? AND status='confirmed' AND deposit_paid=1 AND email_verified IS NOT NULL)",id+'-'+key,id,type,due,id));
   } else {
     if(!['confirmed','completed'].includes(booking.status))fail('Booking is not active',409);
-    statements.push(query(env,'UPDATE bookings SET balance_paid=1 WHERE id=? AND status IN ("confirmed","completed")',id));
+    statements.push(query(env,"UPDATE bookings SET balance_paid=1 WHERE id=? AND status IN ('confirmed','completed')",id));
     statements.push(query(env,"INSERT OR IGNORE INTO outbox(id,booking_id,kind,due) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM bookings WHERE id=? AND status IN ('confirmed','completed') AND balance_paid=1)",id+'-balance',id,'balance_receipt',now(),id));
   }
   statements.push(query(env,"INSERT OR IGNORE INTO outbox(id,booking_id,kind,due) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM bookings WHERE id=? AND status NOT IN ('held','confirmed','completed'))",'review-'+session.id,id,'payment_review',now(),id));

@@ -145,3 +145,8 @@ test('late paid session queues owner review even after cancellation',async()=>{
  const db=database();seed(db);slot(db,'s');book(db,'a','s');db.prepare("UPDATE bookings SET status='canceled',token_cipher=?").run(await cryptToken('a'.repeat(64),'local-encryption-fixture'));await processPaid({DB:adapter(db),STRIPE_LIVE:'false'},session('a'),'evt_late');
  const env={...testEnv(db),STRIPE_SECRET_KEY:undefined};await stripeFixture(async calls=>{await maintenance(env);const sent=JSON.parse(calls.find(c=>c.url==='/emails').options.body);assert.deepEqual(sent.to,['owner@example.com']);assert.ok(sent.text.includes('requires owner review'));});assert.equal(db.prepare('SELECT status FROM bookings').get().status,'canceled');
 });
+
+test('verified balance payment is atomic and duplicate events queue one receipt',async()=>{
+ const db=database();seed(db);slot(db,'s');book(db,'a','s');const env={DB:adapter(db),STRIPE_LIVE:'false'};await processPaid(env,session('a'),'evt_deposit');db.exec("UPDATE bookings SET balance_checkout_id='cs_balance' WHERE id='a'");
+ const paid={...session('a'),id:'cs_balance',amount_total:7000,metadata:{booking_id:'a',kind:'balance'}};await processPaid(env,paid,'evt_balance');await processPaid(env,paid,'evt_balance');await processPaid(env,paid,'evt_balance_other');assert.equal(db.prepare('SELECT balance_paid FROM bookings').get().balance_paid,1);assert.equal(db.prepare("SELECT COUNT(*) n FROM outbox WHERE kind='balance_receipt'").get().n,1);
+});
