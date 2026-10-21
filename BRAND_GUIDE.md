@@ -8,6 +8,7 @@
 - Tone: Direct, artistic, confident, collaborative; no invented awards, testimonials, or client work.
 
 ## Visual system
+- Selected logo direction: 02 / Cut. Use the angular one-color BV vector in `brand-mark.svg`; preserve its proportions and clear space. The website pairs it with the spaced Blazevisionz wordmark. `favicon.svg` supplies its dark browser-icon tile.
 - Near-black (#101010), warm off-white (#eae9e4), neutral gray (#888888).
 - Oversized editorial typography, strong negative space, subtle motion, mobile-first.
 - Portfolio only includes work created by the photographer with appropriate permission.
