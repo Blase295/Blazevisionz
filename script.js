@@ -18,6 +18,7 @@ async function availability() {
     const data = await response.json();
     enabled = data.paymentsEnabled;
     document.getElementById('accept-terms').disabled = !enabled;
+    const optIn=document.getElementById('auto-balance-consent');optIn.disabled=!data.autoBalanceAvailable;if(optIn.disabled)optIn.checked=false;
     termsVersion = data.termsVersion || null;
     select.replaceChildren(new Option('Choose an appointment', ''));
     for (const slot of data.slots) {
@@ -28,13 +29,14 @@ async function availability() {
     button.disabled = !enabled || !data.slots.length;
   } catch {
     enabled = false;
+    const optIn=document.getElementById('auto-balance-consent');optIn.disabled=true;optIn.checked=false;
     select.replaceChildren(new Option('Booking is not open yet', ''));
     status.textContent = 'Booking is being prepared. No payment or appointment can be created.';
   }
 }
 const autoBalanceDescription=document.getElementById('auto-balance-explanation');
 function showAutoBalanceAmount(){const price=document.getElementById('package').value==='signature'?'$62.50':'$50.00';autoBalanceDescription.textContent='Optional: I authorize Blazevisionz to securely save my payment method and automatically charge the remaining '+price+' when my edited gallery is ready, with at least 24 hours email notice before the charge. Final images are released after successful payment. Leave unchecked for manual balance payment.';}
-document.getElementById('package').addEventListener('change',()=>{showAutoBalanceAmount();availability();});showAutoBalanceAmount();
+document.getElementById('package').addEventListener('change',()=>{showAutoBalanceAmount();availability();});showAutoBalanceAmount();document.getElementById('auto-balance-consent').disabled=true;
 document.querySelectorAll('[data-package]').forEach(item => item.addEventListener('click', () => {
   document.getElementById('package').value = item.dataset.package.toLowerCase();
   document.getElementById('booking').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'});
