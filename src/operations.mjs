@@ -73,6 +73,7 @@ export async function maintenance(env) {
       const result=await response.json();if(!result.id)throw new Error('Missing provider receipt');
       await query(env,'UPDATE outbox SET sent=?,provider_id=?,lease_until=NULL,last_error=NULL WHERE id=? AND lease_id=?',now(),result.id,message.id,lease).run();
     }catch {await query(env,"UPDATE outbox SET due=?,lease_until=NULL,last_error='Delivery failed; inspect provider' WHERE id=? AND lease_id=?",now()+Math.min(3600,60*2**message.attempts),message.id,lease).run();}
+  }
   // Deliberately opt-in and disabled until owner-approved sandbox tests, consent terms,
   // and Stripe webhook subscriptions are verified. Never auto-charge legacy bookings.
   if(env.AUTO_BALANCE_ENABLED!=='true')return;
@@ -126,5 +127,4 @@ export async function maintenance(env) {
     }
   }
 
-  }
 }
