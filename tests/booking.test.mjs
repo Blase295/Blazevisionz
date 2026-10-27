@@ -198,7 +198,7 @@ test('historical bookings default to manual collection and consent cannot be inf
 });
 test('new client must explicitly opt in before the booking stores automatic-balance authorization',async()=>{
  for(const consent of [false,true]){
-  const db=database();seed(db);slot(db,'s');const env=testEnv(db);
+  const db=database();seed(db);slot(db,'s');const env={...testEnv(db),AUTO_BALANCE_ENABLED:'true'};
   await stripeFixture(async calls=>{
    const response=await handle(post('/api/bookings',{...payload(),automaticBalanceConsent:consent}),env);
    assert.equal(response.status,202);
@@ -238,3 +238,5 @@ test('automatic final-balance receipt requires verified consent, prior attempt, 
  assert.equal(db.prepare('SELECT auto_balance_status FROM bookings').get().auto_balance_status,'paid');
  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM outbox WHERE kind='balance_receipt'").get().n,1);
 });
+
+test('automatic collection is unavailable while its feature gate is off',async()=>{const db=database();seed(db);slot(db,'s');const env=testEnv(db);await stripeFixture(async()=>{const result=await handle(post('/api/bookings',{...payload(),automaticBalanceConsent:true}),env);assert.equal(result.status,409);assert.equal(db.prepare('SELECT COUNT(*) n FROM bookings').get().n,0);});});
