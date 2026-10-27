@@ -39,15 +39,15 @@ export async function maintenance(env) {
     const consult=await query(env,'SELECT s.start FROM consultations c JOIN slots s ON s.id=c.slot_id WHERE c.booking_id=?',booking.id).first();
     const phoneTime=consult?format(consult.start):'';
     const descriptions={
-      confirmation:`Your ${p.name} is confirmed for ${date} (America/Chicago). Deposit received: ${(p.deposit/100).toFixed(2)}. Remaining balance: ${(p.balance/100).toFixed(2)}. ${booking.auto_balance_consent?'As separately authorized, we will notify you when the gallery is ready and give at least 24 hours notice before charging your saved payment method.':'Please pay the remaining balance through your private portal before final delivery.'} Complete your intake, then schedule your complimentary 10-minute phone consultation.`,
+      confirmation:`Your ${p.name} is confirmed for ${date} (America/Chicago). Deposit received: ${String.fromCharCode(36)}${(p.deposit/100).toFixed(2)}. Remaining balance: ${String.fromCharCode(36)}${(p.balance/100).toFixed(2)}. ${booking.auto_balance_consent?'As separately authorized, we will notify you when the gallery is ready and give at least 24 hours notice before charging your saved payment method.':'Please pay the remaining balance through your private portal before final delivery.'} Complete your intake, then schedule your complimentary 10-minute phone consultation.`,
       owner_confirmation:`Verified booking: ${booking.name}, ${booking.email}, ${p.name}, ${date}.`,
       owner_brief:`Creative brief for ${booking.name}:\n${booking.intake||'Intake pending'}\nPortfolio permission: ${booking.consent?'Yes':'No'}.`,
       owner_selections:`Image selections from ${booking.name}:\n${booking.selections}`,
       shoot_reminder:`Your photography session is ${date} (America/Chicago). Please arrive ready with your agreed outfits. Remaining balance: $${booking.balance_paid?0:p.balance/100}.`,
       consult_confirmation:`Your 10-minute phone consultation is ${phoneTime} (America/Chicago). We will call the phone number in your intake.`,
       consult_reminder:`Reminder: your 10-minute phone consultation is ${phoneTime} (America/Chicago).`,
-      balance_receipt:`Your remaining balance of ${(p.balance/100).toFixed(2)} has been verified as paid. Thank you.`,
-      auto_balance_notice:`Your edited gallery is ready for final payment. As you expressly authorized during booking, we will charge the remaining ${(p.balance/100).toFixed(2)} to your saved payment method no earlier than 24 hours after this notice. Your final photographs will be released once payment is verified. If you need to discuss this payment or your saved method, contact us promptly at ${env.CONTACT_EMAIL}.`,
+      balance_receipt:`Your remaining balance of ${String.fromCharCode(36)}${(p.balance/100).toFixed(2)} has been verified as paid. Thank you.`,
+      auto_balance_notice:`Your edited gallery is ready for final payment. As you expressly authorized during booking, we will charge the remaining ${String.fromCharCode(36)}${(p.balance/100).toFixed(2)} to your saved payment method no earlier than 24 hours after this notice. Your final photographs will be released once payment is verified. If you need to discuss this payment or your saved method, contact us promptly at ${env.CONTACT_EMAIL}.`,
       proof:`Your private proof gallery is ready in your client portal. Choose ${p.images} included images. Additional edits must be quoted and paid separately at $20 each.`,
       delivery:'Your final JPEG images are ready in your private client portal.',
       review:`Thank you for creating with Blazevisionz. Reply to share your feedback.${env.REVIEW_URL?' You may leave a review at '+env.REVIEW_URL:''}`,
