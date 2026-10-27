@@ -32,12 +32,14 @@ async function availability() {
     status.textContent = 'Booking is being prepared. No payment or appointment can be created.';
   }
 }
-document.getElementById('package').addEventListener('change', availability);
+const autoBalanceDescription=document.getElementById('auto-balance-explanation');
+function showAutoBalanceAmount(){const price=document.getElementById('package').value==='signature'?'$62.50':'$50.00';autoBalanceDescription.textContent='Optional: I authorize Blazevisionz to securely save my payment method and automatically charge the remaining '+price+' when my edited gallery is ready, with at least 24 hours email notice before the charge. Final images are released after successful payment. Leave unchecked for manual balance payment.';}
+document.getElementById('package').addEventListener('change',()=>{showAutoBalanceAmount();availability();});showAutoBalanceAmount();
 document.querySelectorAll('[data-package]').forEach(item => item.addEventListener('click', () => {
   document.getElementById('package').value = item.dataset.package.toLowerCase();
   document.getElementById('booking').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'});
   document.getElementById('package').focus({preventScroll:true});
-  availability();
+  showAutoBalanceAmount();availability();
 }));
 document.querySelectorAll('[data-inquiry-type]').forEach(item => item.addEventListener('click', () => {
   document.getElementById('inquiry-type').value = item.dataset.inquiryType;
@@ -48,7 +50,7 @@ form.addEventListener('submit', async event => {
   button.disabled = true;
   status.textContent = 'Reserving your appointment and preparing secure checkout…';
   try {
-    const response = await fetch('/api/bookings', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...Object.fromEntries(new FormData(form)),acceptedTerms:document.getElementById('accept-terms').checked,termsVersion})});
+    const response = await fetch('/api/bookings', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...Object.fromEntries(new FormData(form)),acceptedTerms:document.getElementById('accept-terms').checked,automaticBalanceConsent:document.getElementById('auto-balance-consent').checked,termsVersion})});
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Unable to reserve this appointment.');
     if(data.verificationRequired){status.textContent=data.message;return;}
