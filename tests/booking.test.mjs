@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import {CATALOG,PACKAGES,depositForTotal,chicagoEpoch,weekOf,paidSessionMatches,cryptToken,digest} from '../src/domain.mjs';
-import {handle,processPaid} from '../src/api.mjs';
-function database(){const db=new DatabaseSync(':memory:');db.exec(readFileSync(new URL('../migrations/0001_booking.sql',import.meta.url),'utf8'));db.exec(readFileSync(new URL('../migrations/0002_terms.sql',import.meta.url),'utf8'));db.exec(readFileSync(new URL('../migrations/0003_protect_closed_slots.sql',import.meta.url),'utf8'));db.exec(readFileSync(new URL('../migrations/0004_commercial_inquiries.sql',import.meta.url),'utf8'));db.exec(readFileSync(new URL('../migrations/0006_email_verification.sql',import.meta.url),'utf8'));return db;}
+import {handle,processPaid,processAutoBalance} from '../src/api.mjs';
+function database(){const db=new DatabaseSync(':memory:');db.exec(readFileSync(new URL('../migrations/0001_booking.sql',import.meta.url),'utf8'));db.exec(readFileSync(new URL('../migrations/0002_terms.sql',import.meta.url),'utf8'));db.exec(readFileSync(new URL('../migrations/0003_protect_closed_slots.sql',import.meta.url),'utf8'));db.exec(readFileSync(new URL('../migrations/0004_commercial_inquiries.sql',import.meta.url),'utf8'));db.exec(readFileSync(new URL('../migrations/0006_email_verification.sql',import.meta.url),'utf8'));db.exec(readFileSync(new URL('../migrations/0007_authorized_auto_balance.sql',import.meta.url),'utf8'));return db;}
 function adapter(db){return {prepare(sql){let args=[];const prepared={bind(...values){args=values;return prepared;},async first(){return db.prepare(sql).get(...args)||null;},async all(){return {results:db.prepare(sql).all(...args)};},async run(){return db.prepare(sql).run(...args);}};return prepared;},async batch(statements){db.exec('BEGIN');try{const result=[];for(const statement of statements)result.push(await statement.run());db.exec('COMMIT');return result;}catch(e){db.exec('ROLLBACK');throw e;}}};}
 function seed(db,limit=6){db.prepare('INSERT INTO weeks VALUES(?,?)').run('2027-01-04',limit);db.prepare('INSERT INTO blocks VALUES(?,?,?,?,?)').run('b1','b4us',chicagoEpoch('2027-01-04T09:00'),chicagoEpoch('2027-01-04T12:00'),'2027-01-04');db.prepare('INSERT INTO blocks VALUES(?,?,?,?,?)').run('b2','b4us',chicagoEpoch('2027-01-05T09:00'),chicagoEpoch('2027-01-05T12:00'),'2027-01-04');}
 function slot(db,id,start='2027-01-06T12:00',kind='shoot',minutes=60){const epoch=chicagoEpoch(start);db.prepare('INSERT INTO slots(id,kind,start,end,week,local_date) VALUES(?,?,?,?,?,?)').run(id,kind,epoch,epoch+minutes*60,weekOf(epoch),start.slice(0,10));}
@@ -187,4 +187,54 @@ test('all approved catalog totals and deliverables stay aligned',()=>{
  assert.deepEqual([CATALOG.monthly.total,CATALOG.monthly.interval,CATALOG.monthly.minutes,CATALOG.monthly.images,CATALOG.monthly.usableRAWs],[12500,'month',60,7,true]);
  assert.equal(CATALOG.personalRAW.total,5000);
  assert.deepEqual([CATALOG.campaign.total,CATALOG.campaign.minutes,CATALOG.campaign.locations,CATALOG.campaign.consultationRequired],[45000,120,2,true]);
+});
+
+
+test('historical bookings default to manual collection and consent cannot be inferred',()=>{
+ const db=database();seed(db);slot(db,'s');book(db,'a','s');
+ const b=db.prepare('SELECT * FROM bookings WHERE id=?').get('a');
+ assert.equal(b.auto_balance_consent,0);assert.equal(b.auto_balance_customer,null);assert.equal(b.auto_balance_method,null);
+ assert.equal(b.auto_balance_ready,null);assert.equal(b.auto_balance_attempt,null);assert.equal(b.auto_balance_status,'manual');
+});
+test('new client must explicitly opt in before the booking stores automatic-balance authorization',async()=>{
+ for(const consent of [false,true]){
+  const db=database();seed(db);slot(db,'s');const env=testEnv(db);
+  await stripeFixture(async calls=>{
+   const response=await handle(post('/api/bookings',{...payload(),automaticBalanceConsent:consent}),env);
+   assert.equal(response.status,202);
+   const booking=db.prepare('SELECT * FROM bookings').get();
+   assert.equal(booking.auto_balance_consent,consent?1:0);
+   // Verify the email token before requesting a deposit Checkout session.
+   const verification=db.prepare('SELECT * FROM email_verifications').get();
+   const token=await cryptToken(verification.token_cipher,env.TOKEN_ENCRYPTION_KEY,true);
+   const verified=await handle(post('/api/email/verify',{token}),env);
+   assert.equal(verified.status,200);
+   const checkoutToken=(await verified.json()).checkoutToken;
+   const checkout=await handle(post('/api/checkout',{},checkoutToken),env);
+   assert.equal(checkout.status,200);
+   const request=calls.find(c=>c.url==='/v1/checkout/sessions');
+   const params=new URLSearchParams(request.options.body);
+   assert.equal(params.get('payment_intent_data[setup_future_usage]'),consent?'off_session':null);
+   assert.equal(params.get('customer_creation'),consent?'always':null);
+  });
+ }
+});
+test('automatic final-balance receipt requires verified consent, prior attempt, and exact payment',async()=>{
+ const db=database();seed(db);slot(db,'s');book(db,'a','s');
+ db.exec("UPDATE bookings SET status='confirmed',deposit_paid=1 WHERE id='a'");
+ const env={DB:adapter(db),STRIPE_LIVE:'false'};
+ const payment={id:'pi_auto_a',status:'succeeded',livemode:false,currency:'usd',amount:5000,customer:'cus_a',payment_method:'pm_a',metadata:{booking_id:'a',kind:'auto_balance'}};
+ await processAutoBalance(env,payment,'evt_before_consent');
+ assert.equal(db.prepare('SELECT balance_paid FROM bookings').get().balance_paid,0);
+ db.exec("UPDATE bookings SET auto_balance_consent=1,auto_balance_customer='cus_a',auto_balance_method='pm_a',auto_balance_ready=1 WHERE id='a'");
+ await processAutoBalance(env,payment,'evt_before_notice');
+ assert.equal(db.prepare('SELECT balance_paid FROM bookings').get().balance_paid,0);
+ db.exec("UPDATE bookings SET auto_balance_attempt=2,auto_balance_status='charging' WHERE id='a'");
+ for(const invalid of [{...payment,amount:2500},{...payment,customer:'cus_other'},{...payment,payment_method:'pm_other'},{...payment,livemode:true},{...payment,status:'requires_action'}])
+   await assert.rejects(processAutoBalance(env,invalid,'evt_invalid'));
+ await processAutoBalance(env,payment,'evt_success');
+ await processAutoBalance(env,payment,'evt_success');
+ assert.equal(db.prepare('SELECT balance_paid FROM bookings').get().balance_paid,1);
+ assert.equal(db.prepare('SELECT auto_balance_status FROM bookings').get().auto_balance_status,'paid');
+ assert.equal(db.prepare("SELECT COUNT(*) AS n FROM outbox WHERE kind='balance_receipt'").get().n,1);
 });
