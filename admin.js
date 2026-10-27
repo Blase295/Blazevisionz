@@ -24,6 +24,14 @@ async function load(){
  const clients=document.getElementById('clients');clients.replaceChildren();
  for(const booking of data.bookings){const section=node('section','');section.append(node('h2',`${booking.name} / ${booking.package}`),node('p',`${booking.email} — ${booking.status} — deposit ${booking.deposit_paid?'paid':'unpaid'} / balance ${booking.balance_paid?'paid':'unpaid'}`),node('p',`Portfolio consent: ${booking.consent?'Yes':'No'}`));if(booking.intake)section.append(node('pre',JSON.stringify(JSON.parse(booking.intake),null,2)));if(booking.selections)section.append(node('pre','Selected images:\n'+booking.selections));
  if(['confirmed','completed'].includes(booking.status)){
+ if(booking.auto_balance_consent && !booking.auto_balance_ready && !booking.balance_paid){
+   const note=node('p','Auto-balance authorization recorded. Once the client has selected their images and the edits are finished, send the 24-hour notice before charging the saved method.');
+   const ready=node('button','MARK GALLERY READY + EMAIL CHARGE NOTICE');
+   ready.className='action';
+   ready.onclick=()=>{if(!confirm('Confirm final edits are ready and send a minimum 24-hour advance notice before the authorized balance charge?'))return;save('/client',{id:booking.id,action:'gallery-ready'});};
+   section.append(note,ready);
+ }
+ if(booking.auto_balance_consent)section.append(node('p','Automatic balance status: '+booking.auto_balance_status));
  for(const action of ['proof','delivery']){const form=node('form','');const label=node('label',action==='proof'?'Private proof gallery HTTPS URL':'Private final JPEG delivery HTTPS URL');const input=node('input','');input.type='url';input.required=true;label.append(input);const button=node('button','SEND '+action.toUpperCase());form.append(label,button);form.onsubmit=e=>{e.preventDefault();save('/client',{id:booking.id,action,url:input.value});};section.append(form);}
  if(booking.status==='confirmed'){const form=node('form','');const label=node('label','Reschedule to open photography appointment');const select=node('select','');select.append(new Option('Choose appointment',''));for(const slot of data.slots.filter(s=>s.open&&s.kind==='shoot'))select.append(new Option(new Date(slot.start*1000).toLocaleString('en-US',{timeZone:'America/Chicago'}),slot.id));select.required=true;label.append(select);form.append(label,node('button','RESCHEDULE SESSION'));form.onsubmit=e=>{e.preventDefault();save('/client',{id:booking.id,action:'reschedule',slot:select.value});};section.append(form);}
  for(const action of ['complete','cancel']){const button=node('button',action==='complete'?'MARK COMPLETED':'CANCEL SESSION');button.className='action';button.onclick=()=>{if(action==='cancel'&&!confirm('Cancel this session? Handle any approved refund separately in the Blazevisionz Stripe account.'))return;save('/client',{id:booking.id,action});};section.append(button);}}

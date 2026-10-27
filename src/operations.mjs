@@ -1,4 +1,4 @@
-import {query,stripe,processPaid,enqueue} from './api.mjs';
+import {query,stripe,processPaid,processAutoBalance,readiness,enqueue} from './api.mjs';
 import {PACKAGES,cryptToken} from './domain.mjs';
 import {voiceMaintenance} from './voice.mjs';
 const now=()=>Math.floor(Date.now()/1000);
@@ -39,14 +39,15 @@ export async function maintenance(env) {
     const consult=await query(env,'SELECT s.start FROM consultations c JOIN slots s ON s.id=c.slot_id WHERE c.booking_id=?',booking.id).first();
     const phoneTime=consult?format(consult.start):'';
     const descriptions={
-      confirmation:`Your ${p.name} is confirmed for ${date} (America/Chicago). Deposit received: $${(p.deposit/100).toFixed(2)}. Remaining balance: $${(p.balance/100).toFixed(2)}, due by the end of your session. Complete your intake, then schedule your complimentary 10-minute phone consultation.`,
+      confirmation:`Your ${p.name} is confirmed for ${date} (America/Chicago). Deposit received: ${String.fromCharCode(36)}${(p.deposit/100).toFixed(2)}. Remaining balance: ${String.fromCharCode(36)}${(p.balance/100).toFixed(2)}. ${booking.auto_balance_consent?'As separately authorized, we will notify you when the gallery is ready and give at least 24 hours notice before charging your saved payment method.':'Please pay the remaining balance through your private portal before final delivery.'} Complete your intake, then schedule your complimentary 10-minute phone consultation.`,
       owner_confirmation:`Verified booking: ${booking.name}, ${booking.email}, ${p.name}, ${date}.`,
       owner_brief:`Creative brief for ${booking.name}:\n${booking.intake||'Intake pending'}\nPortfolio permission: ${booking.consent?'Yes':'No'}.`,
       owner_selections:`Image selections from ${booking.name}:\n${booking.selections}`,
       shoot_reminder:`Your photography session is ${date} (America/Chicago). Please arrive ready with your agreed outfits. Remaining balance: $${booking.balance_paid?0:p.balance/100}.`,
       consult_confirmation:`Your 10-minute phone consultation is ${phoneTime} (America/Chicago). We will call the phone number in your intake.`,
       consult_reminder:`Reminder: your 10-minute phone consultation is ${phoneTime} (America/Chicago).`,
-      balance_receipt:`Your remaining balance of $${(p.balance/100).toFixed(2)} has been verified as paid. Thank you.`,
+      balance_receipt:`Your remaining balance of ${String.fromCharCode(36)}${(p.balance/100).toFixed(2)} has been verified as paid. Thank you.`,
+      auto_balance_notice:`Your edited gallery is ready for final payment. As you expressly authorized during booking, we will charge the remaining ${String.fromCharCode(36)}${(p.balance/100).toFixed(2)} to your saved payment method no earlier than 24 hours after this notice. Your final photographs will be released once payment is verified. If you need to discuss this payment or your saved method, contact us promptly at ${env.CONTACT_EMAIL}.`,
       proof:`Your private proof gallery is ready in your client portal. Choose ${p.images} included images. Additional edits must be quoted and paid separately at $20 each.`,
       delivery:'Your final JPEG images are ready in your private client portal.',
       review:`Thank you for creating with Blazevisionz. Reply to share your feedback.${env.REVIEW_URL?' You may leave a review at '+env.REVIEW_URL:''}`,
@@ -73,4 +74,57 @@ export async function maintenance(env) {
       await query(env,'UPDATE outbox SET sent=?,provider_id=?,lease_until=NULL,last_error=NULL WHERE id=? AND lease_id=?',now(),result.id,message.id,lease).run();
     }catch {await query(env,"UPDATE outbox SET due=?,lease_until=NULL,last_error='Delivery failed; inspect provider' WHERE id=? AND lease_id=?",now()+Math.min(3600,60*2**message.attempts),message.id,lease).run();}
   }
+  // Deliberately opt-in and disabled until owner-approved sandbox tests, consent terms,
+  // and Stripe webhook subscriptions are verified. Never auto-charge legacy bookings.
+  if(env.AUTO_BALANCE_ENABLED!=='true')return;
+  const candidates=(await query(env,`
+    SELECT b.* FROM bookings b JOIN outbox o ON o.id=b.id||'-auto-notice'
+    WHERE b.auto_balance_consent=1 AND b.auto_balance_ready IS NOT NULL
+      AND b.auto_balance_attempt IS NULL AND b.balance_paid=0
+      AND b.auto_balance_customer IS NOT NULL AND b.auto_balance_method IS NOT NULL
+      AND b.status IN ('confirmed','completed')
+      AND o.sent IS NOT NULL AND o.sent<=?
+    ORDER BY b.auto_balance_ready LIMIT 10`,now()-86400).all()).results;
+  if(!candidates.length)return;
+  if(!env.STRIPE_SECRET_KEY || !env.EXPECTED_STRIPE_ACCOUNT)return;
+  if((await stripe(env).accounts.retrieve()).id!==env.EXPECTED_STRIPE_ACCOUNT)throw new Error('Auto-balance Stripe account mismatch');
+  for(const booking of candidates){
+    if(!await readiness(env,!!booking.sandbox))continue;
+    // An earlier manual balance Checkout may still be payable. Never expose two
+    // simultaneous collection paths for the same balance.
+    if(booking.balance_checkout_id){
+      await query(env,"UPDATE bookings SET auto_balance_status='review',auto_balance_attempt=COALESCE(auto_balance_attempt,?) WHERE id=? AND balance_paid=0",now(),booking.id).run();
+      await enqueue(env,booking.id+'-auto-charge-review',booking.id,'payment_review');
+      continue;
+    }
+    const claimed=await query(env,`
+      UPDATE bookings SET auto_balance_attempt=?,auto_balance_status='charging'
+      WHERE id=? AND auto_balance_consent=1 AND auto_balance_attempt IS NULL
+        AND auto_balance_ready IS NOT NULL AND balance_paid=0
+        AND status IN ('confirmed','completed')
+        AND EXISTS(SELECT 1 FROM outbox WHERE id=? AND sent IS NOT NULL AND sent<=?)
+      RETURNING id`,now(),booking.id,booking.id+'-auto-notice',now()-86400).first();
+    if(!claimed)continue;
+    try{
+      const p=PACKAGES[booking.package];
+      const intent=await stripe(env).paymentIntents.create({
+        amount:p.balance,currency:'usd',customer:booking.auto_balance_customer,
+        payment_method:booking.auto_balance_method,
+        payment_method_types:['card'],confirm:true,off_session:true,
+        metadata:{booking_id:booking.id,kind:'auto_balance'}
+      },{idempotencyKey:'auto-balance-'+booking.id});
+      await query(env,'UPDATE bookings SET auto_balance_intent=? WHERE id=? AND auto_balance_attempt IS NOT NULL',intent.id,booking.id).run();
+      if(intent.status==='succeeded')await processAutoBalance(env,intent,'auto-'+intent.id);
+      else {
+        await query(env,"UPDATE bookings SET auto_balance_status='review' WHERE id=? AND balance_paid=0",booking.id).run();
+        await enqueue(env,booking.id+'-auto-charge-review',booking.id,'payment_review');
+      }
+    }catch{
+      // Unknown results are never retried blindly: owner reconciles Stripe
+      // payment status before providing a new manual checkout.
+      await query(env,"UPDATE bookings SET auto_balance_status='review' WHERE id=? AND balance_paid=0",booking.id).run();
+      await enqueue(env,booking.id+'-auto-charge-review',booking.id,'payment_review');
+    }
+  }
+
 }
