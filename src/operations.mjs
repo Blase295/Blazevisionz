@@ -93,7 +93,7 @@ export async function maintenance(env) {
     // An earlier manual balance Checkout may still be payable. Never expose two
     // simultaneous collection paths for the same balance.
     if(booking.balance_checkout_id){
-      await query(env,"UPDATE bookings SET auto_balance_status='review' WHERE id=? AND balance_paid=0",booking.id).run();
+      await query(env,"UPDATE bookings SET auto_balance_status='review',auto_balance_attempt=COALESCE(auto_balance_attempt,?) WHERE id=? AND balance_paid=0",now(),booking.id).run();
       await enqueue(env,booking.id+'-auto-charge-review',booking.id,'payment_review');
       continue;
     }
