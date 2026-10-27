@@ -61,6 +61,7 @@ async function createBooking(request,env,sandbox=false) {
   if(!limited.success)fail('Too many booking attempts. Please wait a minute.',429);
   const data=await body(request);
   if(data.acceptedTerms!==true || data.termsVersion!==(sandbox?'sandbox-fixture-v1':env.TERMS_VERSION))fail('Review and accept the current booking terms');
+  if(data.automaticBalanceConsent===true && env.AUTO_BALANCE_ENABLED!=='true')fail('Automatic final-balance collection is not available; choose manual payment',409);
   if(!PACKAGES[data.package] || typeof data.name!=='string' || !data.name.trim() || data.name.length>100 || typeof data.email!=='string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email) || data.email.length>254 || typeof data.slot!=='string') fail('Choose a package, appointment, name, and valid email');
   if(!Number.isInteger(PACKAGES[data.package].deposit))fail('Booking deposit is not configured',409);
   const token=Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');
@@ -313,7 +314,7 @@ export async function handle(request,env) {
       const ready=Number.isInteger(PACKAGES[packageId].deposit) && await readiness(env);
       if(!env.DB)return json({paymentsEnabled:false,slots:[]});
       const slots=(await query(env,"SELECT s.id,s.start FROM slots s JOIN weeks w ON w.week=s.week WHERE s.kind='shoot' AND s.open=1 AND s.start>? AND s.end-s.start>=? AND NOT EXISTS(SELECT 1 FROM bookings WHERE slot_id=s.id AND status IN ('held','confirmed','completed','payment_review')) AND (SELECT COUNT(*) FROM bookings b JOIN slots bs ON bs.id=b.slot_id WHERE bs.week=s.week AND b.status IN ('held','confirmed','completed','payment_review'))<w.booking_limit ORDER BY s.start LIMIT 100",now(),PACKAGES[packageId].minutes*60).all()).results;
-      return json({paymentsEnabled:ready,slots:ready?slots:[],...(ready?{termsVersion:env.TERMS_VERSION}:{})});
+      return json({paymentsEnabled:ready,autoBalanceAvailable:ready && env.AUTO_BALANCE_ENABLED==='true',slots:ready?slots:[],...(ready?{termsVersion:env.TERMS_VERSION}:{})});
     }
     if(!env.DB)fail('Booking infrastructure not configured',503);
     if(path==='/api/webhook' && request.method==='POST')return await webhook(request,env);
