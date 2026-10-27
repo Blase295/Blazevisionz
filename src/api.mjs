@@ -47,7 +47,13 @@ function checkoutParams(env,booking,kind) {
   const p=PACKAGES[booking.package];
   if(!Number.isInteger(p?.deposit) || !Number.isInteger(p?.balance))fail('Deposit allocation awaits owner approval',409);
   const suffix=booking.id.replaceAll('-','').slice(0,8).replace(/[0-9a-f]/g,c=>'abcdefghijklmnop'[parseInt(c,16)]);
-  return {mode:'payment',payment_method_configuration:env.STRIPE_PAYMENT_CONFIGURATION,customer_email:booking.email,client_reference_id:booking.id,metadata:{booking_id:booking.id,kind},integration_identifier:'blazevisionz_'+suffix,excluded_payment_method_types:['afterpay_clearpay','klarna','affirm'],line_items:[{quantity:1,price_data:{currency:'usd',tax_behavior:'exclusive',unit_amount:kind==='deposit'?p.deposit:p.balance,product_data:{name:`${p.name} — ${kind==='deposit'?'booking deposit':'remaining balance'}`}}}],expires_at:booking.expires,success_url:env.SITE_URL+'/?checkout=returned#booking',cancel_url:env.SITE_URL+'/?checkout=canceled#booking'};
+  const params={mode:'payment',payment_method_configuration:env.STRIPE_PAYMENT_CONFIGURATION,customer_email:booking.email,client_reference_id:booking.id,metadata:{booking_id:booking.id,kind},integration_identifier:'blazevisionz_'+suffix,excluded_payment_method_types:['afterpay_clearpay','klarna','affirm'],line_items:[{quantity:1,price_data:{currency:'usd',tax_behavior:'exclusive',unit_amount:kind==='deposit'?p.deposit:p.balance,product_data:{name:`${p.name} — ${kind==='deposit'?'booking deposit':'remaining balance'}`}}}],expires_at:booking.expires,success_url:env.SITE_URL+'/?checkout=returned#booking',cancel_url:env.SITE_URL+'/?checkout=canceled#booking'};
+  // Only a freshly consenting customer can authorize a later off-session final charge.
+  if(kind==='deposit' && booking.auto_balance_consent===1){
+    params.customer_creation='always';
+    params.payment_intent_data={setup_future_usage:'off_session'};
+  }
+  return params;
 }
 async function createBooking(request,env,sandbox=false) {
   if(!await readiness(env,sandbox))fail('Booking is not open yet',503);
@@ -63,6 +69,7 @@ async function createBooking(request,env,sandbox=false) {
   const verificationHash=await digest(verification);
   try {await env.DB.batch([
     query(env,"INSERT INTO bookings(id,slot_id,package,name,email,status,created,expires,token_hash,token_cipher,terms_version,terms_accepted,sandbox) VALUES(?,?,?,?,?,'held',?,?,?,?,?,?,?)",booking.id,booking.slot_id,booking.package,booking.name,booking.email,booking.created,booking.expires,await digest(token),await cryptToken(token,env.TOKEN_ENCRYPTION_KEY),sandbox?'sandbox-fixture-v1':env.TERMS_VERSION,now(),sandbox?1:0),
+    query(env,"UPDATE bookings SET auto_balance_consent=?,auto_balance_status=? WHERE id=?",data.automaticBalanceConsent===true?1:0,data.automaticBalanceConsent===true?'authorized':'manual',booking.id),
     query(env,'INSERT INTO email_verifications(booking_id,token_hash,token_cipher,expires) VALUES(?,?,?,?)',booking.id,verificationHash,await cryptToken(verification,env.TOKEN_ENCRYPTION_KEY),now()+900),
     query(env,'INSERT INTO outbox(id,booking_id,kind,due) VALUES(?,?,?,?)',booking.id+'-verify',booking.id,'email_verification',now())
   ]);}catch{fail('This appointment is unavailable or the weekly limit is reached',409);}
@@ -121,10 +128,18 @@ export async function processPaid(env,session,eventId) {
   if(!id || !['deposit','balance'].includes(kind))return;
   const booking=await query(env,'SELECT * FROM bookings WHERE id=?',id).first();if(!booking)return;
   if(!booking.email_verified || !paidSessionMatches(session,booking,kind,env.STRIPE_LIVE==='true'))fail('Payment verification mismatch',409);
+  let savedMethod=null;
+  if(kind==='deposit' && booking.auto_balance_consent===1){
+    if(!session.customer || !session.payment_intent)fail('Authorized payment method not found; review required',409);
+    const intent=await stripe(env).paymentIntents.retrieve(session.payment_intent);
+    if(intent.status!=='succeeded' || intent.customer!==session.customer || !intent.payment_method || intent.setup_future_usage!=='off_session' || intent.livemode!==(env.STRIPE_LIVE==='true'))fail('Saved payment method verification failed',409);
+    savedMethod={customer:session.customer,method:intent.payment_method};
+  }
   const statements=[query(env,'INSERT OR IGNORE INTO payment_events VALUES(?,?,?,?)',eventId,id,kind,now())];
   if(kind==='deposit') {
     if(!['held','confirmed'].includes(booking.status)) {await env.DB.batch([...statements,query(env,'INSERT OR IGNORE INTO outbox(id,booking_id,kind,due) VALUES(?,?,?,?)','review-'+session.id,id,'payment_review',now())]);return;}
     statements.push(query(env,"UPDATE bookings SET deposit_paid=1,status='confirmed' WHERE id=? AND status='held'",id));
+    if(savedMethod)statements.push(query(env,"UPDATE bookings SET auto_balance_customer=?,auto_balance_method=? WHERE id=? AND auto_balance_consent=1",savedMethod.customer,savedMethod.method,id));
     const slot=await query(env,'SELECT * FROM slots WHERE id=?',booking.slot_id).first();
     for(const [key,type,due] of [['confirmed','confirmation',now()],['brief','owner_confirmation',now()],['reminder','shoot_reminder',Math.max(now(),slot.start-86400)]]) statements.push(query(env,"INSERT OR IGNORE INTO outbox(id,booking_id,kind,due) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM bookings WHERE id=? AND status='confirmed' AND deposit_paid=1 AND email_verified IS NOT NULL)",id+'-'+key,id,type,due,id));
   } else {
@@ -134,6 +149,23 @@ export async function processPaid(env,session,eventId) {
   }
   statements.push(query(env,"INSERT OR IGNORE INTO outbox(id,booking_id,kind,due) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM bookings WHERE id=? AND status NOT IN ('held','confirmed','completed'))",'review-'+session.id,id,'payment_review',now(),id));
   await env.DB.batch(statements);
+}
+// Accept only a verified succeeded off-session PaymentIntent belonging to an explicitly
+// opted-in, notice-sent booking. Metadata alone never authorizes marking it paid.
+export async function processAutoBalance(env,intent,eventId) {
+  if(intent?.metadata?.kind!=='auto_balance' || !intent.metadata.booking_id)return;
+  const booking=await query(env,'SELECT * FROM bookings WHERE id=?',intent.metadata.booking_id).first();
+  if(!booking || booking.auto_balance_consent!==1 || !booking.auto_balance_attempt)return;
+  const p=PACKAGES[booking.package];
+  if(intent.status!=='succeeded' || intent.livemode!==(env.STRIPE_LIVE==='true') ||
+     intent.currency!=='usd' || intent.amount!==p?.balance ||
+     intent.customer!==booking.auto_balance_customer || intent.payment_method!==booking.auto_balance_method ||
+     (booking.auto_balance_intent && booking.auto_balance_intent!==intent.id))fail('Auto balance verification mismatch',409);
+  await env.DB.batch([
+    query(env,'INSERT OR IGNORE INTO payment_events VALUES(?,?,?,?)',eventId,booking.id,'auto_balance',now()),
+    query(env,"UPDATE bookings SET balance_paid=1,auto_balance_intent=?,auto_balance_status='paid' WHERE id=? AND auto_balance_consent=1 AND auto_balance_attempt IS NOT NULL AND status IN ('confirmed','completed')",intent.id,booking.id),
+    query(env,"INSERT OR IGNORE INTO outbox(id,booking_id,kind,due) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM bookings WHERE id=? AND balance_paid=1)",booking.id+'-balance',booking.id,'balance_receipt',now(),booking.id)
+  ]);
 }
 async function webhook(request,env) {
   if(!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET || !env.EXPECTED_STRIPE_ACCOUNT)fail('Webhook not configured',503);
@@ -148,6 +180,16 @@ async function webhook(request,env) {
   if(['checkout.session.completed','checkout.session.async_payment_succeeded'].includes(event.type)) {
     const session=await stripe(env).checkout.sessions.retrieve(event.data.object.id);
     if(session.payment_status==='paid')await processPaid(env,session,event.id);
+  } else if(event.type==='payment_intent.succeeded' && event.data.object.metadata?.kind==='auto_balance') {
+    const intent=await stripe(env).paymentIntents.retrieve(event.data.object.id);
+    await processAutoBalance(env,intent,event.id);
+  } else if(event.type==='payment_intent.payment_failed' && event.data.object.metadata?.kind==='auto_balance') {
+    const intent=await stripe(env).paymentIntents.retrieve(event.data.object.id);
+    const b=await query(env,'SELECT * FROM bookings WHERE id=?',intent.metadata?.booking_id).first();
+    if(b?.auto_balance_consent===1 && b.auto_balance_attempt && intent.customer===b.auto_balance_customer && intent.amount===PACKAGES[b.package]?.balance) {
+      await query(env,"UPDATE bookings SET auto_balance_status='review',auto_balance_intent=? WHERE id=? AND balance_paid=0",intent.id,b.id).run();
+      await enqueue(env,b.id+'-auto-charge-review',b.id,'payment_review');
+    }
   } else if(event.type==='checkout.session.async_payment_failed') {
     const session=await stripe(env).checkout.sessions.retrieve(event.data.object.id);
     const booking=await query(env,'SELECT * FROM bookings WHERE checkout_id=?',session.id).first();
@@ -165,7 +207,7 @@ async function clientRoute(request,env,path) {
     const slot=await query(env,'SELECT start FROM slots WHERE id=?',booking.slot_id).first();
     const consult=await query(env,'SELECT s.start FROM consultations c JOIN slots s ON s.id=c.slot_id WHERE c.booking_id=?',booking.id).first();
     const slots=booking.intake&&!consult?(await query(env,"SELECT id,start FROM slots WHERE kind='consult' AND open=1 AND start>? AND start<? AND NOT EXISTS(SELECT 1 FROM consultations WHERE slot_id=slots.id) ORDER BY start",now(),slot.start).all()).results:[];
-    return json({voiceRemindersAvailable:voiceReady(env),package:p.name,start:slot.start,name:booking.name,email:booking.email,consent:!!booking.consent,intake:booking.intake?JSON.parse(booking.intake):null,consult,slots,paymentsEnabled:Number.isInteger(p.balance) && await readiness(env,!!booking.sandbox),balance:p.balance===null?null:p.balance/100,balancePaid:!!booking.balance_paid,proofUrl:booking.proof_url,deliveryUrl:booking.balance_paid?booking.delivery_url:null});
+    return json({voiceRemindersAvailable:voiceReady(env),package:p.name,start:slot.start,name:booking.name,email:booking.email,consent:!!booking.consent,intake:booking.intake?JSON.parse(booking.intake):null,consult,slots,paymentsEnabled:Number.isInteger(p.balance) && await readiness(env,!!booking.sandbox),balance:p.balance===null?null:p.balance/100,balancePaid:!!booking.balance_paid,autoBalanceAuthorized:!!booking.auto_balance_consent,autoBalanceStatus:booking.auto_balance_status,autoBalanceReady:!!booking.auto_balance_ready,proofUrl:booking.proof_url,deliveryUrl:booking.balance_paid?booking.delivery_url:null});
   }
   const data=await body(request);
   if(path.endsWith('/intake')) {
@@ -183,6 +225,7 @@ async function clientRoute(request,env,path) {
     try{await env.DB.batch([query(env,'INSERT INTO consultations VALUES(?,?)',booking.id,data.slot),query(env,'INSERT OR IGNORE INTO outbox(id,booking_id,kind,due) VALUES(?,?,?,?)',booking.id+'-consult',booking.id,'consult_confirmation',now()),query(env,'INSERT OR IGNORE INTO outbox(id,booking_id,kind,due) VALUES(?,?,?,?)',booking.id+'-consult-reminder',booking.id,'consult_reminder',Math.max(now(),slot.start-3600))]);}catch{fail('Consultation unavailable; paid booking and intake are required',409);}
   } else if(path.endsWith('/balance')) {
     if(!Number.isInteger(p.balance) || !await readiness(env,!!booking.sandbox))fail('Payments unavailable',503);if(booking.balance_paid)fail('Balance already paid',409);
+    if(booking.auto_balance_ready && booking.auto_balance_status!=='failed')fail('Final balance is scheduled or under review; contact the studio before submitting another payment',409);
     let session;
     if(booking.balance_checkout_id){session=await stripe(env).checkout.sessions.retrieve(booking.balance_checkout_id);if(session.status==='complete')fail('Payment is processing; wait for verification',409);}
     if(!session || session.status==='expired') {
@@ -204,7 +247,7 @@ async function clientRoute(request,env,path) {
 }
 async function adminRoute(request,env,path) {
   const actor=await admin(request,env);
-  if(request.method==='GET')return json({sandboxEnabled:env.ENVIRONMENT==='preview' && env.STRIPE_LIVE==='false' && env.SANDBOX_CHECKOUT_ENABLED==='true',slots:(await query(env,'SELECT * FROM slots ORDER BY start').all()).results,blocks:(await query(env,'SELECT * FROM blocks ORDER BY start').all()).results,weeks:(await query(env,'SELECT * FROM weeks ORDER BY week').all()).results,bookings:(await query(env,'SELECT id,package,name,email,status,deposit_paid,balance_paid,intake,consent,consent_updated,selections,proof_url,delivery_url,slot_id FROM bookings ORDER BY created DESC').all()).results});
+  if(request.method==='GET')return json({sandboxEnabled:env.ENVIRONMENT==='preview' && env.STRIPE_LIVE==='false' && env.SANDBOX_CHECKOUT_ENABLED==='true',slots:(await query(env,'SELECT * FROM slots ORDER BY start').all()).results,blocks:(await query(env,'SELECT * FROM blocks ORDER BY start').all()).results,weeks:(await query(env,'SELECT * FROM weeks ORDER BY week').all()).results,bookings:(await query(env,'SELECT id,package,name,email,status,deposit_paid,balance_paid,intake,consent,consent_updated,selections,proof_url,delivery_url,slot_id,auto_balance_consent,auto_balance_ready,auto_balance_status FROM bookings ORDER BY created DESC').all()).results});
   const data=await body(request);const action=path.split('/').at(-1);let resource=crypto.randomUUID();
   if(action==='week') {
     if(!/^\d{4}-\d\d-\d\d$/.test(data.week)||new Date(data.week+'T12:00Z').getUTCDay()!==1 || !Number.isInteger(data.limit) || data.limit<1 || data.limit>6)fail('Choose a Monday and a limit from 1 to 6');
@@ -230,6 +273,15 @@ async function adminRoute(request,env,path) {
       if(booking.status==='held' || !booking.deposit_paid)fail('Reconcile pending payment before cancellation',409);
       await env.DB.batch([query(env,"UPDATE bookings SET status='canceled',token_hash=? WHERE id=?",await digest(crypto.randomUUID()),booking.id),query(env,'DELETE FROM consultations WHERE booking_id=?',booking.id),query(env,'DELETE FROM outbox WHERE booking_id=? AND sent IS NULL',booking.id)]);
       await enqueue(env,booking.id+'-canceled',booking.id,'cancellation');
+    } else if(data.action==='gallery-ready') {
+      if(env.AUTO_BALANCE_ENABLED!=='true' || !await readiness(env,!!booking.sandbox))fail('Automatic balance collection is not enabled',503);
+      if(booking.auto_balance_consent!==1 || !booking.auto_balance_customer || !booking.auto_balance_method)fail('No authorized saved payment method; use manual payment',409);
+      if(!['confirmed','completed'].includes(booking.status) || !booking.deposit_paid || booking.balance_paid || !booking.proof_url || !booking.selections)fail('Complete selections and editing first; balance must remain unpaid',409);
+      if(booking.auto_balance_ready)fail('Final-balance notice already scheduled',409);
+      await env.DB.batch([
+        query(env,"UPDATE bookings SET auto_balance_ready=?,auto_balance_status='notified' WHERE id=? AND auto_balance_ready IS NULL AND auto_balance_consent=1 AND balance_paid=0",now(),booking.id),
+        query(env,"INSERT OR IGNORE INTO outbox(id,booking_id,kind,due) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM bookings WHERE id=? AND auto_balance_ready IS NOT NULL AND auto_balance_consent=1 AND balance_paid=0)",booking.id+'-auto-notice',booking.id,'auto_balance_notice',now(),booking.id)
+      ]);
     } else if(data.action==='complete') {
       if(!booking.balance_paid)fail('Verified full payment required',409);
       await query(env,"UPDATE bookings SET status='completed' WHERE id=? AND status='confirmed'",booking.id).run();
