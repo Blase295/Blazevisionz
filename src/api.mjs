@@ -314,7 +314,7 @@ export async function handle(request,env) {
       const ready=Number.isInteger(PACKAGES[packageId].deposit) && await readiness(env);
       if(!env.DB)return json({paymentsEnabled:false,slots:[]});
       const slots=(await query(env,"SELECT s.id,s.start FROM slots s JOIN weeks w ON w.week=s.week WHERE s.kind='shoot' AND s.open=1 AND s.start>? AND s.end-s.start>=? AND NOT EXISTS(SELECT 1 FROM bookings WHERE slot_id=s.id AND status IN ('held','confirmed','completed','payment_review')) AND (SELECT COUNT(*) FROM bookings b JOIN slots bs ON bs.id=b.slot_id WHERE bs.week=s.week AND b.status IN ('held','confirmed','completed','payment_review'))<w.booking_limit ORDER BY s.start LIMIT 100",now(),PACKAGES[packageId].minutes*60).all()).results;
-      return json({paymentsEnabled:ready,autoBalanceAvailable:ready && env.AUTO_BALANCE_ENABLED==='true',slots:ready?slots:[],...(ready?{termsVersion:env.TERMS_VERSION}:{})});
+      return json({paymentsEnabled:ready,slots:ready?slots:[],...(ready?{termsVersion:env.TERMS_VERSION,autoBalanceAvailable:env.AUTO_BALANCE_ENABLED==='true'}:{})});
     }
     if(!env.DB)fail('Booking infrastructure not configured',503);
     if(path==='/api/webhook' && request.method==='POST')return await webhook(request,env);
